@@ -9,7 +9,7 @@ public interface OrderMapper {
 //    @Mapping(target = "userId", ignore = true)
 //    @Mapping(target = "driverId", ignore = true)
 //    @Mapping(target = "pictureUrl", ignore = true)
-    @Mapping(target = "status", constant = "PENDING")
+//   @Mapping(target = "status", constant = "PENDING")
 //    @Mapping(target = "deliveryCost", constant = "0.0")
 //    @Mapping(target = "distanceKm", constant = "0.0")
 //    @Mapping(target = "trackingNumber", ignore = true)
@@ -23,7 +23,7 @@ public interface OrderMapper {
 //    @Mapping(target = "deliveredAt", ignore = true)
     Order toEntity(OrderForm form);
 
-    @Mapping(target = "userName", ignore = true)
-    @Mapping(target = "driverName", ignore = true)
+//    @Mapping(target = "userName", ignore = true)
+//    @Mapping(target = "driverName", ignore = true)
     OrderDto toDto(Order order);
 }

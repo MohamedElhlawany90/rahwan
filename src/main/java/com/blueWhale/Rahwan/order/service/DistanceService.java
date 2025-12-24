@@ -10,9 +10,7 @@ public class DistanceService {
     /**
      * حساب المسافة بين نقطتين باستخدام Haversine formula
      */
-    public double calculateDistance(
-            double lat1, double lon1,
-            double lat2, double lon2) {
+    public double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
 
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);

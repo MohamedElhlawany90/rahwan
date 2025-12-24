@@ -70,7 +70,7 @@ public class Order {
     // Status & Tracking
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private OrderStatus status = OrderStatus.PENDING;
+    private OrderStatus status ;
 
     @Column(unique = true)
     private String trackingNumber;

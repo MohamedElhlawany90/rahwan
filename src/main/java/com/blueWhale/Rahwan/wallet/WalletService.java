@@ -64,7 +64,6 @@ public class WalletService {
 
     /**
      * تحويل مبلغ مجمد من محفظة لمحفظة
-     * ✅ هنا الدالة اللي انت بتدور عليها
      */
     public void transferFrozenAmount(UUID fromUserId, UUID toUserId, double amount) {
         Wallet fromWallet = getWalletByUserId(fromUserId);

@@ -47,7 +47,7 @@ public class OrderService {
         }
 
         // حساب التكلفة أولاً
-        CostBreakdown cost = costCalculationService.calculateCost(
+        PricingDetails cost = costCalculationService.calculateCost(
                 form.getPickupLatitude(),
                 form.getPickupLongitude(),
                 form.getRecipientLatitude(),
@@ -81,7 +81,7 @@ public class OrderService {
             order.setPictureUrl(photoFileName);
         }
 
-//        order.setStatus(null);
+        order.setStatus(OrderStatus.PENDING);
 
         Order saved = orderRepository.save(order);
         return enrichDto(orderMapper.toDto(saved));

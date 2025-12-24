@@ -6,10 +6,10 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CostBreakdown {
+public class PricingDetails {
     private double baseCost;
     private double distanceCost;
-    private double insuranceCost;
+//    private double insuranceCost;
     private double totalCost;
     private String distanceDisplay;
     private double distanceKm;

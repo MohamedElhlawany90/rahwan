@@ -66,6 +66,10 @@ public class UserController {
     public ResponseEntity<UserDto> getUser(@PathVariable UUID id) {
         return ResponseEntity.ok(userService.getUserById(id));
     }
+    @GetMapping("/{id}/wallet")
+    public ResponseEntity<WalletDto> getUserWallet(@PathVariable UUID id) {
+        return ResponseEntity.ok(userService.getUserWallet(id));
+    }
 
     @DeleteMapping("/{id}/logout")
     public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {

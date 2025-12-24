@@ -81,14 +81,31 @@ public class OrderService {
             order.setPictureUrl(photoFileName);
         }
 
-        order.setStatus(OrderStatus.PENDING);
+        order.setStatus(OrderStatus.CREATED);
 
         Order saved = orderRepository.save(order);
         return enrichDto(orderMapper.toDto(saved));
     }
+    public OrderDto confirmOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+
+
+        order.setStatus(OrderStatus.PENDING);
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new RuntimeException("Order is not in PENDING status");
+        }
+
+        order.setConfirmedAt(LocalDateTime.now());
+        order.setTrackingNumber(generateTrackingNumber());
+
+        Order updated = orderRepository.save(order);
+        return orderMapper.toDto(updated);
+    }
 
     /**
-     * 2. السائق يقبل الطلب
+     * 3. السائق يقبل الطلب
      */
     public OrderDto driverConfirmOrder(Long orderId, UUID driverId) {
 
@@ -142,7 +159,7 @@ public class OrderService {
     }
 
     /**
-     * 3. السائق يستلم الطلب (يدخل OTP من User)
+     * 4. السائق يستلم الطلب (يدخل OTP من User)
      */
     public OrderDto confirmPickup(Long orderId, String otpFromUser) {
 
@@ -166,7 +183,7 @@ public class OrderService {
     }
 
     /**
-     * 4. السائق يسلم الطلب (يدخل OTP من Recipient)
+     * 5. السائق يسلم الطلب (يدخل OTP من Recipient)
      */
     public OrderDto confirmDelivery(Long orderId, String otpFromRecipient) {
 
@@ -201,7 +218,7 @@ public class OrderService {
     }
 
     /**
-     * 5. إرجاع الطلب
+     * 6. إرجاع الطلب
      */
     public OrderDto returnOrder(Long orderId) {
 
@@ -233,7 +250,7 @@ public class OrderService {
     }
 
     /**
-     * 6. تحديث للحالة "في الطريق"
+     * 7. تحديث للحالة "في الطريق"
      */
     public OrderDto updateToInTheWay(Long orderId) {
         Order order = orderRepository.findById(orderId)
@@ -249,7 +266,7 @@ public class OrderService {
     }
 
     /**
-     * 7. جلب طلبات المستخدم
+     * 8. جلب طلبات المستخدم
      */
     public List<OrderDto> getUserOrders(UUID userId) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
@@ -260,7 +277,7 @@ public class OrderService {
     }
 
     /**
-     * 8. جلب طلبات السائق
+     * 9. جلب طلبات السائق
      */
     public List<OrderDto> getDriverOrders(UUID driverId) {
         return orderRepository.findByDriverIdOrderByCreatedAtDesc(driverId)
@@ -271,7 +288,7 @@ public class OrderService {
     }
 
     /**
-     * 9. جلب الطلبات المتاحة
+     * 10. جلب الطلبات المتاحة
      */
     public List<OrderDto> getAvailableOrders() {
         return orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.PENDING)
@@ -282,18 +299,27 @@ public class OrderService {
     }
 
     /**
-     * 10. جلب طلبات حسب الحالة والمستخدم
+     * 11. جلب طلبات حسب الحالة والمستخدم
      */
-    public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
-        return orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, status)
-                .stream()
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
-    }
+        public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
+            return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                    .stream()
+                    .filter(o -> {
+                        if (status == OrderStatus.PENDING) {
+                            // skip CREATED and include PENDING and later statuses
+                            return o.getStatus() != OrderStatus.CREATED;
+                        } else {
+                            return o.getStatus() == status;
+                        }
+                    })
+                    .map(orderMapper::toDto)
+                    .map(this::enrichDto)
+                    .collect(Collectors.toList());
+        }
+
 
     /**
-     * 11. جلب طلب بالـ ID
+     * 12. جلب طلب بالـ ID
      */
     public OrderDto getOrderById(Long orderId) {
         Order order = orderRepository.findById(orderId)
@@ -302,7 +328,7 @@ public class OrderService {
     }
 
     /**
-     * 12. جلب طلب بالـ Tracking Number
+     * 13. جلب طلب بالـ Tracking Number
      */
     public OrderDto getOrderByTrackingNumber(String trackingNumber) {
         Order order = orderRepository.findByTrackingNumber(trackingNumber)
@@ -335,23 +361,23 @@ public class OrderService {
                 String.format("%04d", new Random().nextInt(10000));
     }
 
-    public OrderDto confirmOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
 
-        order.setStatus(OrderStatus.PENDING);
+    public OrderStatusCounts getOrdersCountsByUser(UUID userId) {
+    List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
 
-        if (order.getStatus() != OrderStatus.PENDING) {
-            throw new RuntimeException("Order is not in PENDING status");
-        }
+    long pending = orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count();
+    long accepted = orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count();
+    long inProgress = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count();
+    long inTheWay = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count();
+    long returned = orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count();
+    long delivered = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
 
-        order.setConfirmedAt(LocalDateTime.now());
-        order.setTrackingNumber(generateTrackingNumber());
+    long allOrders = pending + accepted + inProgress + inTheWay + returned + delivered; // or orders.size()
+    long allActiveOrders = pending + accepted + inProgress + inTheWay;
 
-        Order updated = orderRepository.save(order);
-        return orderMapper.toDto(updated);
+    return new OrderStatusCounts(allOrders, allActiveOrders);
+}
+
     }
 
-
-}

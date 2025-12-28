@@ -178,7 +178,6 @@ public class OrderController {
         return ResponseEntity.ok(orderService.confirmOrder(id));
     }
 
-    // put this inside the OrderController class
     @GetMapping("/user/{userId}/countByStatus")
     public ResponseEntity<OrderStatusCounts> getUserOrderCounts(@PathVariable UUID userId) {
         return ResponseEntity.ok(orderService.getOrdersCountsByUser(userId));

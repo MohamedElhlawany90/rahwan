@@ -1,9 +1,10 @@
 // ============================================
-// OrderService.java (COMPLETE & FIXED)
+// OrderService.java (FIXED)
 // ============================================
 package com.blueWhale.Rahwan.order.service;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
+import com.blueWhale.Rahwan.notification.WhatsAppService;
 import com.blueWhale.Rahwan.order.*;
 import com.blueWhale.Rahwan.otp.OrderOtpService;
 import com.blueWhale.Rahwan.user.User;
@@ -33,6 +34,7 @@ public class OrderService {
     private final WalletService walletService;
     private final FileUploadService fileUploadService;
     private final OrderOtpService otpService;
+    private final WhatsAppService whatsAppService;
 
     /**
      * 1. إنشاء طلب جديد من User
@@ -55,9 +57,47 @@ public class OrderService {
                 form.getInsuranceValue()
         );
 
+        // إنشاء الطلب (بدون تجميد - status = CREATED)
+        Order order = orderMapper.toEntity(form);
+        order.setUserId(userId);
+        order.setDeliveryCost(cost.getTotalCost());
+        order.setDistanceKm(cost.getDistanceKm());
+        order.setTrackingNumber(generateTrackingNumber());
+        order.setStatus(OrderStatus.CREATED);
+
+        // توليد OTP للـ pickup
+        String pickupOtp = otpService.generatePickupOtp();
+        order.setOtpForPickup(pickupOtp);
+
+        // رفع الصورة
+        if (photo != null && !photo.isEmpty()) {
+            String photoFileName = fileUploadService.saveOrderPhoto(photo);
+            order.setPictureUrl(photoFileName);
+        }
+
+        Order saved = orderRepository.save(order);
+
+        // إرسال OTP للـ User
+        otpService.sendPickupOtp(user.getPhone(), "Your pickup OTP is: " + pickupOtp);
+
+        return enrichDto(orderMapper.toDto(saved));
+    }
+
+    /**
+     * 2. تأكيد الطلب (تجميد المبلغ + status = PENDING)
+     */
+    public OrderDto confirmOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+
+        // التحقق من أن الطلب في حالة CREATED
+        if (order.getStatus() != OrderStatus.CREATED) {
+            throw new RuntimeException("Order must be in CREATED status to confirm");
+        }
+
         // التحقق من الرصيد (لازم يكون ضعف التكلفة)
-        Wallet userWallet = walletService.getWalletByUserId(userId);
-        double requiredBalance = cost.getTotalCost() * 2;
+        Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
+        double requiredBalance = order.getDeliveryCost() * 2;
 
         if (userWallet.getBalance() < requiredBalance) {
             throw new RuntimeException("Insufficient balance. Required: " + requiredBalance +
@@ -67,41 +107,23 @@ public class OrderService {
         // تجميد ضعف التكلفة
         walletService.freezeAmount(userWallet, requiredBalance);
 
-        // إنشاء الطلب
-        Order order = orderMapper.toEntity(form);
-        order.setUserId(userId);
-        order.setDeliveryCost(cost.getTotalCost());
-        order.setDistanceKm(cost.getDistanceKm());
-        order.setTrackingNumber(generateTrackingNumber());
-
-
-        // رفع الصورة
-        if (photo != null && !photo.isEmpty()) {
-            String photoFileName = fileUploadService.saveOrderPhoto(photo);
-            order.setPictureUrl(photoFileName);
-        }
-
-        order.setStatus(OrderStatus.CREATED);
-
-        Order saved = orderRepository.save(order);
-        return enrichDto(orderMapper.toDto(saved));
-    }
-    public OrderDto confirmOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
-
-
+        // تحديث الحالة
         order.setStatus(OrderStatus.PENDING);
-
-        if (order.getStatus() != OrderStatus.PENDING) {
-            throw new RuntimeException("Order is not in PENDING status");
-        }
-
         order.setConfirmedAt(LocalDateTime.now());
-        order.setTrackingNumber(generateTrackingNumber());
 
         Order updated = orderRepository.save(order);
-        return orderMapper.toDto(updated);
+
+        // إرسال إشعار التأكيد
+        User user = userRepository.findById(order.getUserId()).orElse(null);
+        if (user != null) {
+            whatsAppService.sendOrderConfirmation(
+                    user.getPhone(),
+                    order.getTrackingNumber(),
+                    order.getDeliveryCost()
+            );
+        }
+
+        return enrichDto(orderMapper.toDto(updated));
     }
 
     /**
@@ -151,8 +173,11 @@ public class OrderService {
         // إرسال تأكيد للـ User
         User user = userRepository.findById(order.getUserId()).orElse(null);
         if (user != null) {
-            otpService.sendPickupOtp(user.getPhone(),
-                    "Your order has been accepted by driver. Pickup OTP: " + order.getOtpForPickup());
+            whatsAppService.sendDriverAcceptedNotification(
+                    user.getPhone(),
+                    driver.getName(),
+                    order.getOtpForPickup()
+            );
         }
 
         return enrichDto(orderMapper.toDto(updated));
@@ -214,6 +239,16 @@ public class OrderService {
         walletService.transferFrozenAmount(order.getDriverId(), order.getUserId(), order.getInsuranceValue());
 
         Order updated = orderRepository.save(order);
+
+        // إرسال تأكيد التسليم
+        User user = userRepository.findById(order.getUserId()).orElse(null);
+        if (user != null) {
+            whatsAppService.sendDeliveryConfirmation(
+                    user.getPhone(),
+                    order.getTrackingNumber()
+            );
+        }
+
         return enrichDto(orderMapper.toDto(updated));
     }
 
@@ -301,22 +336,21 @@ public class OrderService {
     /**
      * 11. جلب طلبات حسب الحالة والمستخدم
      */
-        public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
-            return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
-                    .stream()
-                    .filter(o -> {
-                        if (status == OrderStatus.PENDING) {
-                            // skip CREATED and include PENDING and later statuses
-                            return o.getStatus() != OrderStatus.CREATED;
-                        } else {
-                            return o.getStatus() == status;
-                        }
-                    })
-                    .map(orderMapper::toDto)
-                    .map(this::enrichDto)
-                    .collect(Collectors.toList());
-        }
-
+    public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .filter(o -> {
+                    if (status == OrderStatus.PENDING) {
+                        // تجاهل CREATED وإظهار PENDING وما بعدها
+                        return o.getStatus() != OrderStatus.CREATED;
+                    } else {
+                        return o.getStatus() == status;
+                    }
+                })
+                .map(orderMapper::toDto)
+                .map(this::enrichDto)
+                .collect(Collectors.toList());
+    }
 
     /**
      * 12. جلب طلب بالـ ID
@@ -334,6 +368,25 @@ public class OrderService {
         Order order = orderRepository.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with tracking number: " + trackingNumber));
         return enrichDto(orderMapper.toDto(order));
+    }
+
+    /**
+     * 14. جلب إحصائيات الطلبات
+     */
+    public OrderStatusCounts getOrdersCountsByUser(UUID userId) {
+        List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+
+        long pending = orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count();
+        long accepted = orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count();
+        long inProgress = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count();
+        long inTheWay = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count();
+        long returned = orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count();
+        long delivered = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
+
+        long allOrders = orders.size();
+        long allActiveOrders = pending + accepted + inProgress + inTheWay;
+
+        return new OrderStatusCounts(allOrders, allActiveOrders);
     }
 
     /**
@@ -360,24 +413,4 @@ public class OrderService {
         return "ORD" + System.currentTimeMillis() +
                 String.format("%04d", new Random().nextInt(10000));
     }
-
-
-
-    public OrderStatusCounts getOrdersCountsByUser(UUID userId) {
-    List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
-
-    long pending = orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count();
-    long accepted = orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count();
-    long inProgress = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count();
-    long inTheWay = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count();
-    long returned = orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count();
-    long delivered = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
-
-    long allOrders = pending + accepted + inProgress + inTheWay + returned + delivered; // or orders.size()
-    long allActiveOrders = pending + accepted + inProgress + inTheWay;
-
-    return new OrderStatusCounts(allOrders, allActiveOrders);
 }
-
-    }
-

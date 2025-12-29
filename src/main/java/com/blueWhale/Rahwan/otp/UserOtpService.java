@@ -1,5 +1,6 @@
 package com.blueWhale.Rahwan.otp;
 
+import com.blueWhale.Rahwan.notification.WhatsAppService;
 import com.blueWhale.Rahwan.user.User;
 import com.blueWhale.Rahwan.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +12,7 @@ public class UserOtpService {
 
     private final UserRepository userRepository;
     private final OtpService otpService;
-    private final SmsService smsService;
+    private final WhatsAppService WhatsAppService;
 
     public String generateAndSendOtp(String phone) {
         String otp = otpService.generateOtp();
@@ -23,7 +24,7 @@ public class UserOtpService {
         user.setVerifiedPhone(false);
         userRepository.save(user);
 
-        smsService.sendSms(phone, "Your verification OTP is: " + otp);
+        WhatsAppService.sendOtp(phone, "Your verification OTP is: " + otp);
 
         return otp;
     }

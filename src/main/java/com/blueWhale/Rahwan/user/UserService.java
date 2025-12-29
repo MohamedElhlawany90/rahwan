@@ -60,9 +60,9 @@ public class UserService {
             throw new RuntimeException("Invalid phone or password");
         }
 
-//        if (!user.isVerifiedPhone()) {
-//            throw new RuntimeException("Phone not verified");
-//        }
+        if (!user.isVerifiedPhone()) {
+            throw new RuntimeException("Phone not verified");
+        }
 
         if (!user.isActive()) {
             user.setActive(true);

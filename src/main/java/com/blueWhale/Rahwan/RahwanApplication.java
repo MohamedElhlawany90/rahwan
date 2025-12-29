@@ -1,6 +1,6 @@
 package com.blueWhale.Rahwan;
 
-import com.blueWhale.Rahwan.otp.TwilioProperties;
+//import com.blueWhale.Rahwan.otp.TwilioProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -12,7 +12,7 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 @SpringBootApplication
-@EnableConfigurationProperties(TwilioProperties.class)
+//@EnableConfigurationProperties(TwilioProperties.class)
 
 public class RahwanApplication {
 

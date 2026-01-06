@@ -76,52 +76,52 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(orderService.createOrder(form, userId, photo));
     }
-
-    /**
-     * 2. Driver: قبول الطلب
-     */
-    @PostMapping("/{orderId}/confirm-by-driver")
-    public ResponseEntity<OrderDto> driverConfirmOrder(
-            @PathVariable Long orderId,
-            @RequestParam UUID driverId) {
-        return ResponseEntity.ok(orderService.driverConfirmOrder(orderId, driverId));
-    }
-
-    /**
-     * 3. Driver: تأكيد الاستلام
-     */
-    @PostMapping("/{orderId}/confirm-pickup")
-    public ResponseEntity<OrderDto> confirmPickup(
-            @PathVariable Long orderId,
-            @Valid @RequestBody OtpRequest otpRequest) {
-        return ResponseEntity.ok(orderService.confirmPickup(orderId, otpRequest.getOtp()));
-    }
-
-    /**
-     * 4. Driver: تأكيد التسليم
-     */
-    @PostMapping("/{orderId}/confirm-delivery")
-    public ResponseEntity<OrderDto> confirmDelivery(
-            @PathVariable Long orderId,
-            @Valid @RequestBody OtpRequest otpRequest) {
-        return ResponseEntity.ok(orderService.confirmDelivery(orderId, otpRequest.getOtp()));
-    }
-
-    /**
-     * 5. Driver: إرجاع الطلب
-     */
-    @PostMapping("/{orderId}/return")
-    public ResponseEntity<OrderDto> returnOrder(@PathVariable Long orderId) {
-        return ResponseEntity.ok(orderService.returnOrder(orderId));
-    }
-
-    /**
-     * 6. Driver: تحديث "في الطريق"
-     */
-    @PatchMapping("/{orderId}/in-the-way")
-    public ResponseEntity<OrderDto> updateToInTheWay(@PathVariable Long orderId) {
-        return ResponseEntity.ok(orderService.updateToInTheWay(orderId));
-    }
+//
+//    /**
+//     * 2. Driver: قبول الطلب
+//     */
+//    @PostMapping("/{orderId}/confirm-by-driver")
+//    public ResponseEntity<OrderDto> driverConfirmOrder(
+//            @PathVariable Long orderId,
+//            @RequestParam UUID driverId) {
+//        return ResponseEntity.ok(orderService.driverConfirmOrder(orderId, driverId));
+//    }
+//
+//    /**
+//     * 3. Driver: تأكيد الاستلام
+//     */
+//    @PostMapping("/{orderId}/confirm-pickup")
+//    public ResponseEntity<OrderDto> confirmPickup(
+//            @PathVariable Long orderId,
+//            @Valid @RequestBody OtpRequest otpRequest) {
+//        return ResponseEntity.ok(orderService.confirmPickup(orderId, otpRequest.getOtp()));
+//    }
+//
+//    /**
+//     * 4. Driver: تأكيد التسليم
+//     */
+//    @PostMapping("/{orderId}/confirm-delivery")
+//    public ResponseEntity<OrderDto> confirmDelivery(
+//            @PathVariable Long orderId,
+//            @Valid @RequestBody OtpRequest otpRequest) {
+//        return ResponseEntity.ok(orderService.confirmDelivery(orderId, otpRequest.getOtp()));
+//    }
+//
+//    /**
+//     * 5. Driver: إرجاع الطلب
+//     */
+//    @PostMapping("/{orderId}/return")
+//    public ResponseEntity<OrderDto> returnOrder(@PathVariable Long orderId) {
+//        return ResponseEntity.ok(orderService.returnOrder(orderId));
+//    }
+//
+//    /**
+//     * 6. Driver: تحديث "في الطريق"
+//     */
+//    @PatchMapping("/{orderId}/in-the-way")
+//    public ResponseEntity<OrderDto> updateToInTheWay(@PathVariable Long orderId) {
+//        return ResponseEntity.ok(orderService.updateToInTheWay(orderId));
+//    }
 
     /**
      * 7. جلب طلبات المستخدم
@@ -131,21 +131,21 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getUserOrders(userId));
     }
 
-    /**
-     * 8. جلب طلبات السائق
-     */
-    @GetMapping("/driver/{driverId}")
-    public ResponseEntity<List<OrderDto>> getDriverOrders(@PathVariable UUID driverId) {
-        return ResponseEntity.ok(orderService.getDriverOrders(driverId));
-    }
-
-    /**
-     * 9. جلب الطلبات المتاحة
-     */
-    @GetMapping("/available")
-    public ResponseEntity<List<OrderDto>> getAvailableOrders() {
-        return ResponseEntity.ok(orderService.getAvailableOrders());
-    }
+//    /**
+//     * 8. جلب طلبات السائق
+//     */
+//    @GetMapping("/driver/{driverId}")
+//    public ResponseEntity<List<OrderDto>> getDriverOrders(@PathVariable UUID driverId) {
+//        return ResponseEntity.ok(orderService.getDriverOrders(driverId));
+//    }
+//
+//    /**
+//     * 9. جلب الطلبات المتاحة
+//     */
+//    @GetMapping("/available")
+//    public ResponseEntity<List<OrderDto>> getAvailableOrders() {
+//        return ResponseEntity.ok(orderService.getAvailableOrders());
+//    }
 
     /**
      * 10. جلب طلبات حسب الحالة

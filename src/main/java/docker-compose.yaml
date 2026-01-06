@@ -1,0 +1,35 @@
+services:
+  postgresql:
+    image: postgres
+    container_name: ms_pg_sql_rahwan
+    environment:
+      POSTGRES_DB: rahwan
+      POSTGRES_USER: rahwan
+      POSTGRES_PASSWORD: 1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+  requests:
+    image: mohamedelhlawany/rahwan:v1.0
+    container_name: rahwan
+    ports:
+      - "8089:8089"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/rahwan
+      SPRING_DATASOURCE_USERNAME: rahwan
+      SPRING_DATASOURCE_PASSWORD: rahwan
+    depends_on:
+      - postgresql
+    networks:
+      - microservices-net
+    restart: unless-stopped
+
+networks:
+  microservices-net:
+    driver: bridge

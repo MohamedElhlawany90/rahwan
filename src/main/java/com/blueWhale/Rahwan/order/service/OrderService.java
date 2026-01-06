@@ -241,13 +241,11 @@ public class OrderService {
         Order updated = orderRepository.save(order);
 
         // إرسال تأكيد التسليم
-        User user = userRepository.findById(order.getUserId()).orElse(null);
-        if (user != null) {
-            whatsAppService.sendDeliveryConfirmation(
-                    user.getPhone(),
-                    order.getTrackingNumber()
-            );
-        }
+        userRepository.findById(order.getUserId())
+                .ifPresent(user -> whatsAppService.sendDeliveryConfirmation(
+                user.getPhone(),
+                order.getTrackingNumber()
+        ));
 
         return enrichDto(orderMapper.toDto(updated));
     }

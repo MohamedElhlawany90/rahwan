@@ -9,6 +9,7 @@ import com.blueWhale.Rahwan.order.*;
 import com.blueWhale.Rahwan.otp.OrderOtpService;
 import com.blueWhale.Rahwan.user.User;
 import com.blueWhale.Rahwan.user.UserRepository;
+import com.blueWhale.Rahwan.util.ImageUtility;
 import com.blueWhale.Rahwan.wallet.Wallet;
 import com.blueWhale.Rahwan.wallet.WalletService;
 import lombok.RequiredArgsConstructor;
@@ -16,10 +17,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,6 +31,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderService {
 
+    private static final String UPLOADED_FOLDER = "/home/ubuntu/rahwan/";
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
     private final UserRepository userRepository;
@@ -39,7 +44,7 @@ public class OrderService {
     /**
      * 1. إنشاء طلب جديد من User
      */
-    public OrderDto createOrder(OrderForm form, UUID userId, MultipartFile photo) {
+    public OrderDto createOrder(OrderForm orderForm, UUID userId) throws IOException {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -50,15 +55,15 @@ public class OrderService {
 
         // حساب التكلفة أولاً
         PricingDetails cost = costCalculationService.calculateCost(
-                form.getPickupLatitude(),
-                form.getPickupLongitude(),
-                form.getRecipientLatitude(),
-                form.getRecipientLongitude(),
-                form.getInsuranceValue()
+                orderForm.getPickupLatitude(),
+                orderForm.getPickupLongitude(),
+                orderForm.getRecipientLatitude(),
+                orderForm.getRecipientLongitude(),
+                orderForm.getInsuranceValue()
         );
 
         // إنشاء الطلب (بدون تجميد - status = CREATED)
-        Order order = orderMapper.toEntity(form);
+        Order order = orderMapper.toEntity(orderForm);
         order.setUserId(userId);
         order.setDeliveryCost(cost.getTotalCost());
         order.setDistanceKm(cost.getDistanceKm());
@@ -70,9 +75,18 @@ public class OrderService {
         order.setOtpForPickup(pickupOtp);
 
         // رفع الصورة
-        if (photo != null && !photo.isEmpty()) {
-            String photoFileName = fileUploadService.saveOrderPhoto(photo);
-            order.setPictureUrl(photoFileName);
+        if (orderForm.getPhoto() != null) {
+            byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
+            Path path = Paths
+                    .get(UPLOADED_FOLDER + new Date().getTime() + "A-A" + orderForm.getPhoto().getOriginalFilename());
+            String url = Files.write(path, bytes).toUri().getPath();
+            Set<PosixFilePermission> perms = new HashSet<>();
+            perms.add(PosixFilePermission.OWNER_READ);
+            perms.add(PosixFilePermission.OWNER_WRITE);
+            perms.add(PosixFilePermission.GROUP_READ);
+            perms.add(PosixFilePermission.OTHERS_READ);
+            Files.setPosixFilePermissions(path, perms);
+            order.setPhoto(url.substring(url.lastIndexOf("/") + 1));
         }
 
         Order saved = orderRepository.save(order);
@@ -390,18 +404,18 @@ public class OrderService {
     /**
      * Helper: إضافة أسماء المستخدمين
      */
-    private OrderDto enrichDto(OrderDto dto) {
-        if (dto.getUserId() != null) {
-            userRepository.findById(dto.getUserId()).ifPresent(user ->
-                    dto.setUserName(user.getName())
+    private OrderDto enrichDto(OrderDto orderDto) {
+        if (orderDto.getUserId() != null) {
+            userRepository.findById(orderDto.getUserId()).ifPresent(user ->
+                    orderDto.setUserName(user.getName())
             );
         }
-        if (dto.getDriverId() != null) {
-            userRepository.findById(dto.getDriverId()).ifPresent(driver ->
-                    dto.setDriverName(driver.getName())
+        if (orderDto.getDriverId() != null) {
+            userRepository.findById(orderDto.getDriverId()).ifPresent(driver ->
+                    orderDto.setDriverName(driver.getName())
             );
         }
-        return dto;
+        return orderDto;
     }
 
     /**

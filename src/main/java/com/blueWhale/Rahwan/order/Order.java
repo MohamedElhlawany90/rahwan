@@ -23,6 +23,8 @@ public class Order {
 
     private UUID driverId;
 
+    private String photo ;
+
     // Pickup Location
     private double pickupLatitude;
     private double pickupLongitude;

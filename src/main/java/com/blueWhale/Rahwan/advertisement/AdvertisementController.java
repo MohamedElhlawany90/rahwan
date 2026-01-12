@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -17,9 +18,9 @@ public class AdvertisementController {
     @PostMapping(consumes = "multipart/form-data")
     public ResponseEntity<AdvertisementDto> create(
             @ModelAttribute AdvertisementForm form,
-            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+            @RequestPart(value = "photo", required = false) MultipartFile photo) throws IOException {
 
-        return ResponseEntity.ok(service.create(form, photo));
+        return ResponseEntity.ok(service.create(form));
     }
 
 
@@ -33,8 +34,8 @@ public class AdvertisementController {
             @PathVariable String id,
             @ModelAttribute AdvertisementForm form,
             @RequestPart(value = "photo", required = false) MultipartFile photo
-    ) {
-        return ResponseEntity.ok(service.update(id, form, photo));
+    ) throws IOException {
+        return ResponseEntity.ok(service.update(id, form));
     }
 
     @DeleteMapping("/{id}")

@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -53,7 +54,7 @@ public class OrderController {
             @RequestParam Boolean allowInspection,
             @RequestParam Boolean receiverPaysShipping,
             @Parameter(description = "Order photo", schema = @Schema(type = "string", format = "binary"))
-            @RequestParam(value = "photo", required = false) MultipartFile photo) {
+            @RequestParam(value = "photo", required = false) MultipartFile photo) throws IOException {
 
         OrderForm form = new OrderForm();
         form.setPickupLatitude(pickupLatitude);
@@ -74,7 +75,7 @@ public class OrderController {
         form.setReceiverPaysShipping(receiverPaysShipping);
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(orderService.createOrder(form, userId, photo));
+                .body(orderService.createOrder(form, userId));
     }
 //
 //    /**

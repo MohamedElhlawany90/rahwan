@@ -3,6 +3,7 @@
 // ============================================
 package com.blueWhale.Rahwan.order;
 
+import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.order.service.OrderService;
 import com.blueWhale.Rahwan.otp.OtpRequest;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,52 +33,27 @@ public class OrderController {
     /**
      * 1. User: إنشاء طلب جديد
      */
-    @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/create/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<OrderDto> createOrder(
-            @RequestParam UUID userId,
-            @RequestParam double pickupLatitude,
-            @RequestParam double pickupLongitude,
-            @RequestParam String pickupAddress,
-            @RequestParam double recipientLatitude,
-            @RequestParam double recipientLongitude,
-            @RequestParam String recipientAddress,
-            @RequestParam String recipientName,
-            @RequestParam String recipientPhone,
-            @RequestParam OrderType orderType,
-            @RequestParam(required = false) double insuranceValue,
-            @RequestParam(required = false) String additionalNotes,
-            @Parameter(description = "Collection date (yyyy-MM-dd)", example = "2025-12-21")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate collectionDate,
-            @Parameter(description = "Collection time (HH:mm)", example = "01:11")
-            @RequestParam(required = false) @DateTimeFormat(pattern = "HH:mm") LocalTime collectionTime,
-            @RequestParam Boolean anyTime,
-            @RequestParam Boolean allowInspection,
-            @RequestParam Boolean receiverPaysShipping,
-            @Parameter(description = "Order photo", schema = @Schema(type = "string", format = "binary"))
-            @RequestParam(value = "photo", required = false) MultipartFile photo) throws IOException {
+            @PathVariable UUID userId,
+            @ModelAttribute OrderForm orderForm
 
-        OrderForm form = new OrderForm();
-        form.setPickupLatitude(pickupLatitude);
-        form.setPickupLongitude(pickupLongitude);
-        form.setPickupAddress(pickupAddress);
-        form.setRecipientLatitude(recipientLatitude);
-        form.setRecipientLongitude(recipientLongitude);
-        form.setRecipientAddress(recipientAddress);
-        form.setRecipientName(recipientName);
-        form.setRecipientPhone(recipientPhone);
-        form.setOrderType(orderType);
-        form.setInsuranceValue(insuranceValue);
-        form.setAdditionalNotes(additionalNotes);
-        form.setCollectionDate(collectionDate);
-        form.setCollectionTime(collectionTime);
-        form.setAnyTime(anyTime);
-        form.setAllowInspection(allowInspection);
-        form.setReceiverPaysShipping(receiverPaysShipping);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(orderService.createOrder(form, userId));
+    ) {
+        try {
+            OrderDto orderDto = orderService.createOrder(orderForm, userId);
+            return ResponseEntity.ok(orderDto);
+        } catch (ResourceNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(null);
+        } catch (RuntimeException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(null);
+        } catch (IOException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(null);
+        }
     }
-//
+
 //    /**
 //     * 2. Driver: قبول الطلب
 //     */

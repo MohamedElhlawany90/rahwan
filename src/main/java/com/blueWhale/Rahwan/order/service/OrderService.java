@@ -37,7 +37,6 @@ public class OrderService {
     private final UserRepository userRepository;
     private final CostCalculationService costCalculationService;
     private final WalletService walletService;
-    private final FileUploadService fileUploadService;
     private final OrderOtpService otpService;
     private final WhatsAppService whatsAppService;
 

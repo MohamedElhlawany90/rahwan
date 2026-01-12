@@ -54,8 +54,7 @@ public class OrderForm {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate collectionDate;
 
-    @DateTimeFormat(pattern = "HH:mm")
-    @JsonFormat(pattern = "HH:mm")
+    @Pattern(regexp = "^([01]\\d|2[0-3]):([0-5]\\d)$", message = "Invalid time format")
     private LocalTime collectionTime;
 
     @NotNull(message = "Any time flag is required")

@@ -3,6 +3,7 @@
 // ============================================
 package com.blueWhale.Rahwan.order;
 
+import com.blueWhale.Rahwan.exception.BusinessException;
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.notification.WhatsAppService;
 import com.blueWhale.Rahwan.order.service.CostCalculationService;
@@ -43,16 +44,15 @@ public class OrderService {
     /**
      * 1. إنشاء طلب جديد من User
      */
-    public CreationDto createOrder(OrderForm orderForm, UUID userId) throws IOException {
+    public CreationDto createOrder(OrderForm orderForm, UUID userId) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!user.isActive()) {
-            throw new RuntimeException("User account is not active");
+            throw new BusinessException("User account is not active");
         }
 
-        // حساب التكلفة أولاً
         PricingDetails cost = costCalculationService.calculateCost(
                 orderForm.getPickupLatitude(),
                 orderForm.getPickupLongitude(),
@@ -61,41 +61,34 @@ public class OrderService {
                 orderForm.getInsuranceValue()
         );
 
-        // إنشاء الطلب (بدون تجميد - status = CREATED)
         Order order = orderMapper.toEntity(orderForm);
         order.setUserId(userId);
         order.setDeliveryCost(cost.getTotalCost());
         order.setDistanceKm(cost.getDistanceKm());
         order.setTrackingNumber(generateTrackingNumber());
         order.setCreationStatus(CreationStatus.CREATED);
-        order.setStatus(OrderStatus.PENDING);
+//        order.setStatus(OrderStatus.PENDING);
 
-        // توليد OTP للـ pickup
         String pickupOtp = otpService.generatePickupOtp();
         order.setOtpForPickup(pickupOtp);
 
-        // رفع الصورة
         if (orderForm.getPhoto() != null) {
-            byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
-            Path path = Paths
-                    .get(UPLOADED_FOLDER + new Date().getTime() + "A-A" + orderForm.getPhoto().getOriginalFilename());
-            String url = Files.write(path, bytes).toUri().getPath();
-            Set<PosixFilePermission> perms = new HashSet<>();
-            perms.add(PosixFilePermission.OWNER_READ);
-            perms.add(PosixFilePermission.OWNER_WRITE);
-            perms.add(PosixFilePermission.GROUP_READ);
-            perms.add(PosixFilePermission.OTHERS_READ);
-            Files.setPosixFilePermissions(path, perms);
-            order.setPhoto(url.substring(url.lastIndexOf("/") + 1));
+            try {
+                byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
+                Path path = Paths.get(UPLOADED_FOLDER + System.currentTimeMillis() + "-" + orderForm.getPhoto().getOriginalFilename());
+                Files.write(path, bytes);
+                order.setPhoto(path.getFileName().toString());
+            } catch (IOException e) {
+                throw new BusinessException("Failed to upload order image");
+            }
         }
 
         Order saved = orderRepository.save(order);
-
-        // إرسال OTP للـ User
         otpService.sendPickupOtp(user.getPhone(), "Your pickup OTP is: " + pickupOtp);
 
         return enrichCreationDto(orderMapper.toCreationDto(saved));
     }
+
 
     /**
      * 2. تأكيد الطلب (تجميد المبلغ + status = PENDING)

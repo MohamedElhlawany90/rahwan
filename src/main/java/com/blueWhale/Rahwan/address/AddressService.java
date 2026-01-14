@@ -26,7 +26,24 @@ public class AddressService {
     /**
      * Create Address (Pickup + Dropoff)
      */
-    public Address create(AddressForm addressForm, UUID userId) {
+    public PickupAddressDto createPickup(PickupAddressForm pickupAddressForm, UUID userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Address address = addressMapper.fromForm(pickupAddressForm);
+        address.setUser(user);
+
+        // نقل القيم من الفورم للـ Entity
+        address.setPickuplatitude(pickupAddressForm.getPickuplatitude());
+        address.setPickuplongitude(pickupAddressForm.getPickuplongitude());
+
+        Address saved = addressRepository.save(address);
+        return addressMapper.toPickupDto(saved);
+    }
+
+
+    public DropoffAddressDto createDropoff(DropoffAddressForm addressForm, UUID userId) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -35,16 +52,25 @@ public class AddressService {
         address.setUser(user);
 
 
-        return  addressRepository.save(address);
+        Address saved = addressRepository.save(address);
+        return addressMapper.toDropoffDto(saved);
     }
     /**
      * Get all addresses for user
      */
-    public List<AddressDto> getUserAddresses(UUID userId) {
+    public List<PickupAddressDto> getUserPickupAddresses(UUID userId) {
 
         return addressRepository.findByUserId(userId)
                 .stream()
-                .map(addressMapper::toDto)
+                .map(addressMapper::toPickupDto)
+                .toList();
+    }
+
+    public List<DropoffAddressDto> getUserDropoffAddresses(UUID userId) {
+
+        return addressRepository.findByUserId(userId)
+                .stream()
+                .map(addressMapper::toDropoffDto)
                 .toList();
     }
 
@@ -56,8 +82,8 @@ public class AddressService {
         Address address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
 
-        address.setPickUplatitude(pickupLat);
-        address.setPickUplongitude(pickupLng);
+        address.setPickuplatitude(pickupLat);
+        address.setPickuplongitude(pickupLng);
 
         return addressMapper.toPickupDto(address);
     }

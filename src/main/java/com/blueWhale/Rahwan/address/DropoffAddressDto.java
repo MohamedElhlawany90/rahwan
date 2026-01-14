@@ -10,6 +10,6 @@ import lombok.NoArgsConstructor;
 public class DropoffAddressDto {
 
     private Long id;
-    private double dropOffLatitude;
-    private double dropOffLongitude;
+    private double dropOfflatitude;
+    private double dropOfflongitude;
 }

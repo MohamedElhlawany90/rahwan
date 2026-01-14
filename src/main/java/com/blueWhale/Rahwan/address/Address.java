@@ -16,11 +16,11 @@ public class Address {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private double PickUplatitude;
-    private double PickUplongitude;
+    private double pickuplatitude;
+    private double pickuplongitude;
 
-    private double DropOfflatitude;
-    private double DropOfflongitude;
+    private double dropOfflatitude;
+    private double dropOfflongitude;
 
     @ManyToOne
     private User user ;

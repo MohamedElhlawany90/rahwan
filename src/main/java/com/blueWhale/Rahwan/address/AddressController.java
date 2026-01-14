@@ -11,11 +11,9 @@ import java.util.UUID;
 public class AddressController {
 
     private final AddressService addressService;
-    private final AddressMapper addressMapper;
 
-    public AddressController(AddressService addressService, AddressMapper addressMapper) {
+    public AddressController(AddressService addressService) {
         this.addressService = addressService;
-        this.addressMapper = addressMapper;
     }
 
     /**
@@ -23,11 +21,10 @@ public class AddressController {
      */
     @PostMapping("/pickup")
     public PickupAddressDto createPickup(
-            @RequestBody AddressForm form,
+            @RequestBody PickupAddressForm form,
             @RequestParam UUID userId
     ) {
-        Address saved = addressService.create(form, userId);
-        return addressMapper.toPickupDto(saved);
+        return addressService.createPickup(form, userId);
     }
 
     /**
@@ -35,12 +32,12 @@ public class AddressController {
      */
     @PostMapping("/recipient")
     public DropoffAddressDto createDropoff(
-            @RequestBody AddressForm form,
+            @RequestBody DropoffAddressForm form,
             @RequestParam UUID userId
     ) {
-        Address saved = addressService.create(form, userId);
+        return addressService.createDropoff(form, userId);
 
-        return addressMapper.toDropoffDto(saved);
+
     }
 
     /**
@@ -73,13 +70,13 @@ public class AddressController {
     }
 
     @GetMapping("/pickup/{userId}")
-    public List<AddressDto> getUserPickupAddresses(@PathVariable UUID userId) {
-        return addressService.getUserAddresses(userId);
+    public List<PickupAddressDto> getUserPickupAddresses(@PathVariable UUID userId) {
+        return addressService.getUserPickupAddresses(userId);
     }
 
     @GetMapping("/recipient/{userId}")
-    public List<AddressDto> getUserRecipientAddresses(@PathVariable UUID userId) {
-        return addressService.getUserAddresses(userId);
+    public List<DropoffAddressDto> getUserRecipientAddresses(@PathVariable UUID userId) {
+        return addressService.getUserDropoffAddresses(userId);
     }
 
     @DeleteMapping("/{id}")

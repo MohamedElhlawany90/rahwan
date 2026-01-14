@@ -11,6 +11,6 @@ import java.util.UUID;
 @AllArgsConstructor
 public class PickupAddressDto {
     private Long id;
-    private double pickupLatitude;
-    private double pickupLongitude;
+    private double pickuplatitude;
+    private double pickuplongitude;
 }

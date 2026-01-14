@@ -71,7 +71,7 @@ public class Order {
 
     // Status & Tracking
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+//    @Column(nullable = false)
     private OrderStatus status ;
 
     // creation status

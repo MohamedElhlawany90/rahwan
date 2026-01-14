@@ -1,19 +1,11 @@
 package com.blueWhale.Rahwan.address;
 
+
 import lombok.Data;
 
 @Data
-public class AddressDto {
-
-    private Long id;
-
-    private double pickuplatitude;
-    private double pickuplongitude;
+public class DropoffAddressForm {
 
     private double dropOfflatitude;
     private double dropOfflongitude;
-
-
-
-
 }

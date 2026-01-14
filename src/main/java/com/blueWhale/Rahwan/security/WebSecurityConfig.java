@@ -32,14 +32,10 @@ public class WebSecurityConfig {
                                 "/api/advertisements/**",
                                 "/swagger-ui/index.html",
                                 "/api/**",
+                                "/api/address/**",
                                 "/api/test/all",
-                                "/uploads/**",
-                                "/uploads/images/**",
-                                "/uploads/documents/**",
-                                "/uploads/videos/**",
-                                "/uploads/audio/**",
-                                "/uploads/others/**",
-                                "/uploads/icons/**"
+                                "/uploads/**"
+
                         ).permitAll()
 
                         .anyRequest().authenticated()

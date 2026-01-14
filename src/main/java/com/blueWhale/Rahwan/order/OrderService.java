@@ -1,11 +1,12 @@
 // ============================================
 // OrderService.java (FIXED)
 // ============================================
-package com.blueWhale.Rahwan.order.service;
+package com.blueWhale.Rahwan.order;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.notification.WhatsAppService;
-import com.blueWhale.Rahwan.order.*;
+import com.blueWhale.Rahwan.order.service.CostCalculationService;
+import com.blueWhale.Rahwan.order.service.PricingDetails;
 import com.blueWhale.Rahwan.otp.OrderOtpService;
 import com.blueWhale.Rahwan.user.User;
 import com.blueWhale.Rahwan.user.UserRepository;
@@ -15,7 +16,6 @@ import com.blueWhale.Rahwan.wallet.WalletService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -43,7 +43,7 @@ public class OrderService {
     /**
      * 1. إنشاء طلب جديد من User
      */
-    public OrderDto createOrder(OrderForm orderForm, UUID userId) throws IOException {
+    public CreationDto createOrder(OrderForm orderForm, UUID userId) throws IOException {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -67,7 +67,8 @@ public class OrderService {
         order.setDeliveryCost(cost.getTotalCost());
         order.setDistanceKm(cost.getDistanceKm());
         order.setTrackingNumber(generateTrackingNumber());
-        order.setStatus(OrderStatus.CREATED);
+        order.setCreationStatus(CreationStatus.CREATED);
+        order.setStatus(OrderStatus.PENDING);
 
         // توليد OTP للـ pickup
         String pickupOtp = otpService.generatePickupOtp();
@@ -93,7 +94,7 @@ public class OrderService {
         // إرسال OTP للـ User
         otpService.sendPickupOtp(user.getPhone(), "Your pickup OTP is: " + pickupOtp);
 
-        return enrichDto(orderMapper.toDto(saved));
+        return enrichCreationDto(orderMapper.toCreationDto(saved));
     }
 
     /**
@@ -104,7 +105,7 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
         // التحقق من أن الطلب في حالة CREATED
-        if (order.getStatus() != OrderStatus.CREATED) {
+        if (order.getCreationStatus() != CreationStatus.CREATED) {
             throw new RuntimeException("Order must be in CREATED status to confirm");
         }
 
@@ -350,14 +351,6 @@ public class OrderService {
     public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
-                .filter(o -> {
-                    if (status == OrderStatus.PENDING) {
-                        // تجاهل CREATED وإظهار PENDING وما بعدها
-                        return o.getStatus() != OrderStatus.CREATED;
-                    } else {
-                        return o.getStatus() == status;
-                    }
-                })
                 .map(orderMapper::toDto)
                 .map(this::enrichDto)
                 .collect(Collectors.toList());
@@ -394,6 +387,10 @@ public class OrderService {
         long returned = orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count();
         long delivered = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
 
+//        long allOrders = orders.stream()
+//                .filter(o -> o.getStatus() != null)
+//                .count();
+
         long allOrders = orders.size();
         long allActiveOrders = pending + accepted + inProgress + inTheWay;
 
@@ -416,6 +413,19 @@ public class OrderService {
         }
         return orderDto;
     }
+    private CreationDto enrichCreationDto(CreationDto creationDto) {
+        if (creationDto.getUserId() != null) {
+            userRepository.findById(creationDto.getUserId()).ifPresent(user ->
+                    creationDto.setUserName(user.getName())
+            );
+        }
+        if (creationDto.getDriverId() != null) {
+            userRepository.findById(creationDto.getDriverId()).ifPresent(driver ->
+                    creationDto.setDriverName(driver.getName())
+            );
+        }
+        return creationDto;
+    }
 
     /**
      * Helper: توليد Tracking Number
@@ -423,5 +433,41 @@ public class OrderService {
     private String generateTrackingNumber() {
         return "ORD" + System.currentTimeMillis() +
                 String.format("%04d", new Random().nextInt(10000));
+    }
+    public List<OrderDto> getAllOrders(){
+        return orderRepository.findAll()
+                .stream()
+                .map(orderMapper::toDto)
+                .map(this::enrichDto)
+                .collect(Collectors.toList());
+    }
+    public OrderStatisticsDto getOrderStatistics(UUID userId) {
+
+        List<Order> orders = orderRepository.findByUserId(userId) ;
+
+        long pending = orders.stream()
+                .filter(order -> order.getStatus()== OrderStatus.PENDING).count();
+        long accepted = orders.stream()
+                .filter(order -> order.getStatus()== OrderStatus.ACCEPTED).count();
+        long inProgress = orders.stream()
+                .filter(order -> order.getStatus()== OrderStatus.IN_PROGRESS).count();
+        long inTheWay = orders.stream()
+                .filter(order -> order.getStatus()== OrderStatus.IN_THE_WAY).count();
+        long returned = orders.stream()
+                .filter(order -> order.getStatus()== OrderStatus.RETURN).count();
+        long delivered = orders.stream()
+                .filter(order -> order.getStatus()== OrderStatus.DELIVERED).count();
+
+        OrderStatisticsDto statisticsDto = new OrderStatisticsDto();
+
+        statisticsDto.setTotalOrders(orders.size());
+        statisticsDto.setPending(pending);
+        statisticsDto.setAccepted(accepted);
+        statisticsDto.setInProgress(inProgress);
+        statisticsDto.setInTheWay(inTheWay);
+        statisticsDto.setInDelivery(returned);
+        statisticsDto.setDelivered(delivered);
+
+        return statisticsDto;
     }
 }

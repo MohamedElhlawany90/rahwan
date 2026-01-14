@@ -11,38 +11,43 @@ import java.util.UUID;
 public class AddressController {
 
     private final AddressService addressService;
+    private final AddressMapper addressMapper;
 
-    public AddressController(AddressService addressService) {
+    public AddressController(AddressService addressService, AddressMapper addressMapper) {
         this.addressService = addressService;
+        this.addressMapper = addressMapper;
     }
 
     /**
      * Create Address (Pickup)
      */
     @PostMapping("/pickup")
-    public AddressDto createPickup(
+    public PickupAddressDto createPickup(
             @RequestBody AddressForm form,
             @RequestParam UUID userId
     ) {
-        return addressService.create(form, userId);
+        Address saved = addressService.create(form, userId);
+        return addressMapper.toPickupDto(saved);
     }
 
     /**
      * Create Address (Dropoff)
      */
     @PostMapping("/recipient")
-    public AddressDto createDropoff(
+    public DropoffAddressDto createDropoff(
             @RequestBody AddressForm form,
             @RequestParam UUID userId
     ) {
-        return addressService.create(form, userId);
+        Address saved = addressService.create(form, userId);
+
+        return addressMapper.toDropoffDto(saved);
     }
 
     /**
      * Update Pickup Location (Map)
      */
     @PutMapping("/{id}/pickup")
-    public AddressDto updatePickup(
+    public PickupAddressDto updatePickup(
             @PathVariable Long id,
             @RequestParam double lat,
             @RequestParam double lng
@@ -54,7 +59,7 @@ public class AddressController {
      * Update Recipient Location (Manual Input)
      */
     @PutMapping("/{id}/recipient")
-    public AddressDto updateRecipient(
+    public DropoffAddressDto updateRecipient(
             @PathVariable Long id,
             @RequestParam double lat,
             @RequestParam double lng

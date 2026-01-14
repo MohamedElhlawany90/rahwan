@@ -6,8 +6,11 @@ import org.mapstruct.*;
 public interface OrderMapper {
 
 @Mapping(target = "photo", ignore = true)
-Order toEntity(OrderForm form);
+    Order toEntity(OrderForm form);
 
 
     OrderDto toDto(Order order);
+
+    @Mapping(source = "creationStatus", target = "status")
+    CreationDto toCreationDto(Order order);
 }

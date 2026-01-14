@@ -26,7 +26,7 @@ public class AddressService {
     /**
      * Create Address (Pickup + Dropoff)
      */
-    public AddressDto create(AddressForm addressForm, UUID userId) {
+    public Address create(AddressForm addressForm, UUID userId) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -35,8 +35,7 @@ public class AddressService {
         address.setUser(user);
 
 
-        Address saved = addressRepository.save(address);
-        return addressMapper.toDto(saved);
+        return  addressRepository.save(address);
     }
     /**
      * Get all addresses for user
@@ -52,21 +51,21 @@ public class AddressService {
     /**
      * Update Pickup Location only (User)
      */
-    public AddressDto updatePickupLocation(Long addressId, double pickupLat, double pickupLng) {
+    public PickupAddressDto updatePickupLocation(Long addressId, double pickupLat, double pickupLng) {
 
         Address address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
 
-        address.setLatitude(pickupLat);
-        address.setLongitude(pickupLng);
+        address.setPickUplatitude(pickupLat);
+        address.setPickUplongitude(pickupLng);
 
-        return addressMapper.toDto(address);
+        return addressMapper.toPickupDto(address);
     }
 
     /**
      * Update Dropoff Location only (Recipient)
      */
-    public AddressDto updateRecipientLocation(
+    public DropoffAddressDto updateRecipientLocation(
             Long addressId,
             double recipientLat,
             double recipientLng
@@ -75,10 +74,10 @@ public class AddressService {
         Address address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
 
-        address.setLatitude(recipientLat);
-        address.setLongitude(recipientLng);
+        address.setDropOfflatitude(recipientLat);
+        address.setDropOfflongitude(recipientLng);
 
-        return addressMapper.toDto(address);
+        return addressMapper.toDropoffDto(address);
     }
 
     /**

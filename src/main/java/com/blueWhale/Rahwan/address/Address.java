@@ -16,8 +16,11 @@ public class Address {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private double latitude;
-    private double longitude;
+    private double PickUplatitude;
+    private double PickUplongitude;
+
+    private double DropOfflatitude;
+    private double DropOfflongitude;
 
     @ManyToOne
     private User user ;

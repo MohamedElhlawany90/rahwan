@@ -7,12 +7,12 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 @Mapper(componentModel = "spring", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
 public interface AddressMapper {
 
+    Address fromForm(AddressForm form);
 
-//    @Mapping(target = "user.id", source = "userId")
-    Address fromForm(AddressForm addressForm);
+    PickupAddressDto toPickupDto(Address address);
 
-//    @Mapping(target = "userId", source = "user.id")
-    AddressDto toDto (Address address);
+    DropoffAddressDto toDropoffDto(Address address);
 
-
+    AddressDto toDto(Address address);
 }
+

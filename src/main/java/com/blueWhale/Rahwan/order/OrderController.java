@@ -4,22 +4,13 @@
 package com.blueWhale.Rahwan.order;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
-import com.blueWhale.Rahwan.order.service.OrderService;
-import com.blueWhale.Rahwan.otp.OtpRequest;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,14 +25,14 @@ public class OrderController {
      * 1. User: إنشاء طلب جديد
      */
     @PostMapping(value = "/create/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<OrderDto> createOrder(
+    public ResponseEntity<CreationDto> createOrder(
             @PathVariable UUID userId,
             @ModelAttribute OrderForm orderForm
 
     ) {
         try {
-            OrderDto orderDto = orderService.createOrder(orderForm, userId);
-            return ResponseEntity.ok(orderDto);
+            CreationDto creationDto = orderService.createOrder(orderForm, userId);
+            return ResponseEntity.ok(creationDto);
         } catch (ResourceNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(null);
@@ -160,5 +151,15 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrdersCountsByUser(userId));
     }
 
+    @GetMapping
+    public ResponseEntity<List<OrderDto>> getAllOrders() {
 
+        return ResponseEntity.ok(orderService.getAllOrders());
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<OrderStatisticsDto> getOrderStatistics(UUID userId){
+
+        return ResponseEntity.ok(orderService.getOrderStatistics(userId));
+    }
 }

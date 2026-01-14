@@ -74,6 +74,11 @@ public class Order {
     @Column(nullable = false)
     private OrderStatus status ;
 
+    // creation status
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private CreationStatus creationStatus ;
+
     @Column(unique = true)
     private String trackingNumber;
 

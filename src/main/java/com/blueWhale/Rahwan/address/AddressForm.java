@@ -6,8 +6,10 @@ import lombok.Data;
 @Data
 public class AddressForm {
 
-    private double latitude;
-    private double longitude;
+    private double PickUplatitude;
+    private double PickUplongitude;
 
+    private double DropOfflatitude;
+    private double DropOfflongitude;
 
 }

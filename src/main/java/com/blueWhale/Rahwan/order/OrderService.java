@@ -44,7 +44,7 @@ public class OrderService {
     /**
      * 1. إنشاء طلب جديد من User
      */
-    public CreationDto createOrder(OrderForm orderForm, UUID userId) {
+    public CreationDto createOrder(OrderForm orderForm, UUID userId) throws IOException {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -72,15 +72,26 @@ public class OrderService {
         String pickupOtp = otpService.generatePickupOtp();
         order.setOtpForPickup(pickupOtp);
 
+        // هنا عرفنا uploadDir
+        Path uploadDir = Paths.get(UPLOADED_FOLDER);
+
+
         if (orderForm.getPhoto() != null) {
-            try {
-                byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
-                Path path = Paths.get(UPLOADED_FOLDER + System.currentTimeMillis() + "-" + orderForm.getPhoto().getOriginalFilename());
-                Files.write(path, bytes);
-                order.setPhoto(path.getFileName().toString());
-            } catch (IOException e) {
-                throw new BusinessException("Failed to upload order image");
+            // لو الفولدر مش موجود نعمله
+            if (!Files.exists(uploadDir)) {
+                Files.createDirectories(uploadDir);
             }
+            byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
+            Path path = Paths
+                    .get(UPLOADED_FOLDER + new Date().getTime() + "A-A" + orderForm.getPhoto().getOriginalFilename());
+            String url = Files.write(path, bytes).toUri().getPath();
+            Set<PosixFilePermission> perms = new HashSet<>();
+            perms.add(PosixFilePermission.OWNER_READ);
+            perms.add(PosixFilePermission.OWNER_WRITE);
+            perms.add(PosixFilePermission.GROUP_READ);
+            perms.add(PosixFilePermission.OTHERS_READ);
+            Files.setPosixFilePermissions(path, perms);
+            order.setPhoto(url.substring(url.lastIndexOf("/") + 1));
         }
 
         Order saved = orderRepository.save(order);

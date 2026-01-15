@@ -39,6 +39,8 @@ public class OrderController {
         } catch (RuntimeException ex) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(null);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 

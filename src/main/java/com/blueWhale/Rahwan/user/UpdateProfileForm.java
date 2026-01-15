@@ -16,4 +16,6 @@ public class UpdateProfileForm {
     @NotBlank(message = "Phone is required")
     @Pattern(regexp = "^20\\d{10,12}$", message = "Phone must start with 20")
     private String phone;
+
+    private String photo;
 }

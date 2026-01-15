@@ -2,35 +2,44 @@
 package com.blueWhale.Rahwan.user;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
+//import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
+import com.blueWhale.Rahwan.util.ImageUtility;
 import com.blueWhale.Rahwan.wallet.Wallet;
 import com.blueWhale.Rahwan.wallet.WalletDto;
 import com.blueWhale.Rahwan.wallet.WalletMapper;
 import com.blueWhale.Rahwan.wallet.WalletService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import java.util.UUID;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.*;
 
 @Service
 @Transactional
 public class UserService {
 
+    private static final String UPLOADED_FOLDER = "/home/ubuntu/rahwan/";
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final WalletService walletService;
     private final WalletMapper walletMapper;
+    private final PasswordEncoder passwordEncoder ;
+//    private final JwtTokenProvider jwtTokenProvider;
 
     public UserService(UserRepository userRepository, UserMapper userMapper,
-                       WalletService walletService, WalletMapper walletMapper) {
+                       WalletService walletService, WalletMapper walletMapper, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.walletService = walletService;
         this.walletMapper = walletMapper;
+        this.passwordEncoder = passwordEncoder;
+//        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     public UserDto createUser(UserForm form) {
@@ -43,6 +52,7 @@ public class UserService {
                });
 
        User user = userMapper.toEntity(form);
+       user.setPassword(passwordEncoder.encode(user.getPassword()));
        User saved = userRepository.save(user);
 
        walletService.createWalletForUser(saved);
@@ -50,13 +60,14 @@ public class UserService {
         return userMapper.toDto(saved);
     }
 
+
     public UserDto signIn(String phone, String password) {
         validatePhone(phone);
 
         User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (!user.getPassword().equals(password)) {
+        if (!passwordEncoder.matches(password, user.getPassword())) {
             throw new RuntimeException("Invalid phone or password");
         }
 
@@ -68,7 +79,12 @@ public class UserService {
             user.setActive(true);
             userRepository.save(user);
         }
-
+//        String token = jwtTokenProvider
+//                .generateToken(user.getId(), user.getPhone(), user.getType());
+//
+//        UserDto userDto = userMapper.toDto(user);
+//        userDto.setToken(token);
+//        return userDto;
         return userMapper.toDto(user);
     }
 
@@ -99,7 +115,7 @@ public class UserService {
 
         user.setName(form.getName());
         user.setPhone(form.getPhone());
-        user.setPassword(form.getPassword());
+        user.setPassword(passwordEncoder.encode(form.getPassword()));
         user.setType(form.getType());
 
         User updated = userRepository.save(user);
@@ -107,7 +123,7 @@ public class UserService {
 
     }
 
-    public UserDto updateProfile(UUID userId, UpdateProfileForm form, MultipartFile image){
+    public UserDto updateProfile(UUID userId, UpdateProfileForm form) throws IOException {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(()-> new ResourceNotFoundException("User not found"));
@@ -123,9 +139,25 @@ public class UserService {
         user.setName(form.getName());
         user.setPhone(form.getPhone());
 
-        if(image != null || !image.isEmpty()) {
-            String imagePath = saveProfileImage(image);
-            user.setProfileImage(imagePath);
+        // هنا عرفنا uploadDir
+        Path uploadDir = Paths.get(UPLOADED_FOLDER);
+
+        if (form.getPhoto() != null) {
+            // لو الفولدر مش موجود نعمله
+            if (!Files.exists(uploadDir)) {
+                Files.createDirectories(uploadDir);
+            }
+            byte[] bytes = ImageUtility.compressImage(form.getPhoto().getBytes());
+            Path path = Paths
+                    .get(UPLOADED_FOLDER + new Date().getTime() + "A-A" + form.getPhoto());
+            String url = Files.write(path, bytes).toUri().getPath();
+            Set<PosixFilePermission> perms = new HashSet<>();
+            perms.add(PosixFilePermission.OWNER_READ);
+            perms.add(PosixFilePermission.OWNER_WRITE);
+            perms.add(PosixFilePermission.GROUP_READ);
+            perms.add(PosixFilePermission.OTHERS_READ);
+            Files.setPosixFilePermissions(path, perms);
+            form.setPhoto(url.substring(url.lastIndexOf("/") + 1));
         }
 
             user.setActive(true);

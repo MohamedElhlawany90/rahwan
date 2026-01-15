@@ -23,4 +23,5 @@ public class UserDto {
     private boolean verifiedPhone;
     private LocalDateTime createdAt;
     private double walletBalance;
+    private String token ;
 }

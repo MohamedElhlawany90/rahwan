@@ -11,6 +11,7 @@ public interface OrderMapper {
 
     OrderDto toDto(Order order);
 
+    @Mapping(source = "photo", target = "pictureUrl")
     @Mapping(source = "creationStatus", target = "status")
     CreationDto toCreationDto(Order order);
 }

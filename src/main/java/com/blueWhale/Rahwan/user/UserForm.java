@@ -23,7 +23,7 @@ public class UserForm {
     @Size(min = 6, message = "Password must be at least 6 characters")
     private String password;
 
-    @NotBlank(message = "Type is required (user or driver)")
-    @Pattern(regexp = "^(user|driver)$", message = "Type must be 'user' or 'driver'")
+    @NotBlank(message = "Type is required (user or driver or admin)")
+    @Pattern(regexp = "^(user|driver|admin)$", message = "Type must be 'user' or 'driver'")
     private String type;
 }

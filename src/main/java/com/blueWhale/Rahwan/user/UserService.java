@@ -198,17 +198,17 @@ public class UserService {
         }
     }
 
-    private String saveProfileImage(MultipartFile file){
-        try {
-            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-            Path path = Paths.get("uploads/" + fileName);
-            Files.createDirectories(path.getParent());
-            Files.write(path, file.getBytes());
-            return fileName;
-        } catch (Exception e){
-            throw new RuntimeException("Failed to save image");
-        }
-    }
+//    private String saveProfileImage(MultipartFile file){
+//        try {
+//            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+//            Path path = Paths.get("uploads/" + fileName);
+//            Files.createDirectories(path.getParent());
+//            Files.write(path, file.getBytes());
+//            return fileName;
+//        } catch (Exception e){
+//            throw new RuntimeException("Failed to save image");
+//        }
+//    }
     public WalletDto updateUserBalance(UUID userId, double newBalance) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));

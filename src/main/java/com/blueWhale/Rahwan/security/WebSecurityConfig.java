@@ -30,6 +30,7 @@ public class WebSecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api/advertisements/**",
+                                "//api/charities**",
                                 "/swagger-ui/index.html",
                                 "/api/**",
                                 "/api/address/**",

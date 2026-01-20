@@ -3,6 +3,7 @@ package com.blueWhale.Rahwan.user;
 
 import com.blueWhale.Rahwan.otp.UserOtpService;
 import com.blueWhale.Rahwan.wallet.WalletDto;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
@@ -43,16 +44,18 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUser(id, form));
     }
 
-    @PostMapping(value = "/profile/{id}", consumes = "multipart/form-data")
+    @PostMapping(value = "/profile/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<UserDto> updateProfile(
             @PathVariable UUID id,
             @RequestPart("name") String name,
             @RequestPart("phone") String phone,
-            @RequestPart(value = "image", required = false) MultipartFile image) throws IOException {
+            @RequestPart(value = "image", required = false) MultipartFile image
+    ) throws IOException {
 
         UpdateProfileForm form = UpdateProfileForm.builder()
                 .name(name)
                 .phone(phone)
+                .profileImage(image)
                 .build();
 
         return ResponseEntity.ok(userService.updateProfile(id, form));

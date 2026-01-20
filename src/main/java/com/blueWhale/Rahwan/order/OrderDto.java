@@ -36,7 +36,7 @@ public class OrderDto {
     private OrderType orderType;
     private double insuranceValue;
     private double deliveryCost;
-    private String pictureUrl;
+    private String photo;
     private String additionalNotes;
 
     // Collection Time
@@ -46,6 +46,8 @@ public class OrderDto {
     private LocalTime collectionTime;
 
     private Boolean anyTime;
+
+    private String rejectionReason;
 
     // Options
     private Boolean allowInspection;

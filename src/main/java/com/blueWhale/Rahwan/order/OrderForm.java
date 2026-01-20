@@ -44,6 +44,8 @@ public class OrderForm {
     @NotNull(message = "Order type is required")
     private OrderType orderType;
 
+    private String rejectionReason;
+
     @DecimalMin(value = "0.0", message = "Insurance value must be positive")
     private double insuranceValue;
 

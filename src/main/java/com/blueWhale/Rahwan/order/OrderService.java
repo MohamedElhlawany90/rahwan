@@ -355,6 +355,7 @@ public class OrderService {
     public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
+                .filter(order -> order.getStatus() == status)
                 .map(orderMapper::toDto)
                 .map(this::enrichDto)
                 .collect(Collectors.toList());
@@ -363,11 +364,11 @@ public class OrderService {
     /**
      * 12. جلب طلب بالـ ID
      */
-    public OrderDto getOrderById(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-        return enrichDto(orderMapper.toDto(order));
-    }
+        public OrderDto getOrderById(Long orderId) {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+            return enrichDto(orderMapper.toDto(order));
+        }
 
     /**
      * 13. جلب طلب بالـ Tracking Number
@@ -474,4 +475,17 @@ public class OrderService {
 
         return statisticsDto;
     }
+    public OrderDto changeOrderStatus(Long orderId, OrderStatus status) {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // تغيير الحالة يدوي
+        order.setStatus(status);
+
+        Order savedOrder = orderRepository.save(order);
+
+        return orderMapper.toDto(savedOrder);
+    }
+
 }

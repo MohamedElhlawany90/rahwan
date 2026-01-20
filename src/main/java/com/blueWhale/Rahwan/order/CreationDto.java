@@ -36,7 +36,7 @@ public class CreationDto {
     private OrderType orderType;
     private double insuranceValue;
     private double deliveryCost;
-    private String pictureUrl;
+    private String photo;
     private String additionalNotes;
 
     // Collection Time

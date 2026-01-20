@@ -51,11 +51,10 @@ public class Order {
     @Column(nullable = false)
     private double deliveryCost;
 
-    @Column(length = 1000)
-    private String pictureUrl;
-
     @Column(length = 500)
     private String additionalNotes;
+
+    private String rejectionReason;
 
     // Collection Time
     private LocalDate collectionDate;

@@ -142,25 +142,34 @@ public class UserService {
         // هنا عرفنا uploadDir
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
 
-        if (form.getPhoto() != null) {
-            // لو الفولدر مش موجود نعمله
+        if (form.getProfileImage() != null && !form.getProfileImage().isEmpty()) {
+
             if (!Files.exists(uploadDir)) {
                 Files.createDirectories(uploadDir);
             }
-            byte[] bytes = ImageUtility.compressImage(form.getPhoto().getBytes());
-            Path path = Paths
-                    .get(UPLOADED_FOLDER + new Date().getTime() + "A-A" + form.getPhoto());
-            String url = Files.write(path, bytes).toUri().getPath();
+
+            byte[] bytes = ImageUtility.compressImage(form.getProfileImage().getBytes());
+
+            String fileName = new Date().getTime()
+                    + "A-A"
+                    + form.getProfileImage().getOriginalFilename();
+
+            Path path = uploadDir.resolve(fileName);
+
+            Files.write(path, bytes);
+
             Set<PosixFilePermission> perms = new HashSet<>();
             perms.add(PosixFilePermission.OWNER_READ);
             perms.add(PosixFilePermission.OWNER_WRITE);
             perms.add(PosixFilePermission.GROUP_READ);
             perms.add(PosixFilePermission.OTHERS_READ);
             Files.setPosixFilePermissions(path, perms);
-            form.setPhoto(url.substring(url.lastIndexOf("/") + 1));
+
+            user.setProfileImage(fileName); // ✅ المهم ده
         }
 
-            user.setActive(true);
+
+        user.setActive(true);
 
             User saved = userRepository.save(user);
             return userMapper.toDto(saved);

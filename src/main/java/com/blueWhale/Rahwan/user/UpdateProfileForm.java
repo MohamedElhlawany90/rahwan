@@ -3,6 +3,7 @@ package com.blueWhale.Rahwan.user;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Data
 @NoArgsConstructor
@@ -17,5 +18,5 @@ public class UpdateProfileForm {
     @Pattern(regexp = "^20\\d{10,12}$", message = "Phone must start with 20")
     private String phone;
 
-    private String photo;
+    private MultipartFile profileImage;
 }

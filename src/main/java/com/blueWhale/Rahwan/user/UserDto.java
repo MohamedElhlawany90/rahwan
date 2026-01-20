@@ -22,6 +22,10 @@ public class UserDto {
     private boolean active;
     private boolean verifiedPhone;
     private LocalDateTime createdAt;
+
     private double walletBalance;
+    private double frozenBalance;
+    private double totalBalance;
+
     private String token ;
 }

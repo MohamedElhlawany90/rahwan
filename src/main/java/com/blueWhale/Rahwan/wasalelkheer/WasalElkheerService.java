@@ -1,4 +1,4 @@
-package com.blueWhale.Rahwan.orderorg;
+package com.blueWhale.Rahwan.wasalelkheer;
 
 import com.blueWhale.Rahwan.charity.Charity;
 import com.blueWhale.Rahwan.charity.CharityRepository;
@@ -21,15 +21,15 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class OrderOrgService {
+public class WasalElkheerService {
 
     private static final String UPLOADED_FOLDER = "/home/ubuntu/rahwan/";
-    private final OrderOrgRepository orderOrgRepository;
-    private final OrderOrgMapper orderOrgMapper;
+    private final WasalElkheerRepository WasalElkheerRepository;
+    private final WasalElkheerMapper WasalElkheerMapper;
     private final UserRepository userRepository;
     private final CharityRepository charityRepository;
 
-    public OrderOrgDto createOrderOrg(OrderOrgForm form, UUID userId) throws IOException {
+    public WasalElkheerDto createWasalElkheer(WasalElkheerForm form, UUID userId) throws IOException {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -45,8 +45,8 @@ public class OrderOrgService {
             throw new RuntimeException("Charity is not active");
         }
 
-        OrderOrg orderOrg = orderOrgMapper.toEntity(form);
-        orderOrg.setUserId(userId);
+        WasalElkheer WasalElkheer = WasalElkheerMapper.toEntity(form);
+        WasalElkheer.setUserId(userId);
 
         // هنا عرفنا uploadDir
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
@@ -66,62 +66,62 @@ public class OrderOrgService {
             perms.add(PosixFilePermission.GROUP_READ);
             perms.add(PosixFilePermission.OTHERS_READ);
             Files.setPosixFilePermissions(path, perms);
-            orderOrg.setPhoto(url.substring(url.lastIndexOf("/") + 1));
+            WasalElkheer.setPhoto(url.substring(url.lastIndexOf("/") + 1));
         }
-        orderOrg.setStatus(OrderOrgStatus.PENDING);
+        WasalElkheer.setStatus(WasalElkheerStatus.PENDING);
 
-        OrderOrg saved = orderOrgRepository.save(orderOrg);
-        return enrichDto(orderOrgMapper.toDto(saved));
+        WasalElkheer saved = WasalElkheerRepository.save(WasalElkheer);
+        return enrichDto(WasalElkheerMapper.toDto(saved));
     }
 
-    public List<OrderOrgDto> getUserOrders(UUID userId) {
-        return orderOrgRepository.findByUserIdOrderByCreatedAtDesc(userId)
+    public List<WasalElkheerDto> getUserOrders(UUID userId) {
+        return WasalElkheerRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
-                .map(orderOrgMapper::toDto)
+                .map(WasalElkheerMapper::toDto)
                 .map(this::enrichDto)
                 .collect(Collectors.toList());
     }
 
-    public List<OrderOrgDto> getCharityOrders(Long charityId) {
-        return orderOrgRepository.findByCharityIdOrderByCreatedAtDesc(charityId)
+    public List<WasalElkheerDto> getCharityOrders(Long charityId) {
+        return WasalElkheerRepository.findByCharityIdOrderByCreatedAtDesc(charityId)
                 .stream()
-                .map(orderOrgMapper::toDto)
+                .map(WasalElkheerMapper::toDto)
                 .map(this::enrichDto)
                 .collect(Collectors.toList());
     }
 
-    public List<OrderOrgDto> getOrdersByStatus(OrderOrgStatus status) {
-        return orderOrgRepository.findByStatusOrderByCreatedAtDesc(status)
+    public List<WasalElkheerDto> getOrdersByStatus(WasalElkheerStatus status) {
+        return WasalElkheerRepository.findByStatusOrderByCreatedAtDesc(status)
                 .stream()
-                .map(orderOrgMapper::toDto)
+                .map(WasalElkheerMapper::toDto)
                 .map(this::enrichDto)
                 .collect(Collectors.toList());
     }
 
-    public OrderOrgDto getOrderById(Long orderId) {
-        OrderOrg orderOrg = orderOrgRepository.findById(orderId)
+    public WasalElkheerDto getOrderById(Long orderId) {
+        WasalElkheer WasalElkheer = WasalElkheerRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
-        return enrichDto(orderOrgMapper.toDto(orderOrg));
+        return enrichDto(WasalElkheerMapper.toDto(WasalElkheer));
     }
 
-    public OrderOrgDto updateOrderStatus(Long orderId, OrderOrgStatus newStatus) {
-        OrderOrg orderOrg = orderOrgRepository.findById(orderId)
+    public WasalElkheerDto updateOrderStatus(Long orderId, WasalElkheerStatus newStatus) {
+        WasalElkheer WasalElkheer = WasalElkheerRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-        orderOrg.setStatus(newStatus);
-        OrderOrg updated = orderOrgRepository.save(orderOrg);
-        return enrichDto(orderOrgMapper.toDto(updated));
+        WasalElkheer.setStatus(newStatus);
+        WasalElkheer updated = WasalElkheerRepository.save(WasalElkheer);
+        return enrichDto(WasalElkheerMapper.toDto(updated));
     }
 
-    public List<OrderOrgDto> getAllOrders() {
-        return orderOrgRepository.findAll()
+    public List<WasalElkheerDto> getAllOrders() {
+        return WasalElkheerRepository.findAll()
                 .stream()
-                .map(orderOrgMapper::toDto)
+                .map(WasalElkheerMapper::toDto)
                 .map(this::enrichDto)
                 .collect(Collectors.toList());
     }
 
-    private OrderOrgDto enrichDto(OrderOrgDto dto) {
+    private WasalElkheerDto enrichDto(WasalElkheerDto dto) {
         if (dto.getUserId() != null) {
             userRepository.findById(dto.getUserId()).ifPresent(user ->
                     dto.setUserName(user.getName())

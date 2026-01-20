@@ -1,8 +1,10 @@
-package com.blueWhale.Rahwan.orderorg;
+package com.blueWhale.Rahwan.wasalelkheer;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
@@ -12,7 +14,7 @@ import java.time.LocalTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class OrderOrgForm {
+public class WasalElkheerForm {
 
     @NotNull(message = "User latitude is required")
     private Double userLatitude;
@@ -24,7 +26,7 @@ public class OrderOrgForm {
     private Long charityId;
 
     @NotNull(message = "Order type is required")
-    private OrderOrgType orderType;
+    private WasalElkheerType orderType;
 
     private MultipartFile photo;
 
@@ -34,8 +36,9 @@ public class OrderOrgForm {
     private LocalDate collectionDate;
 
     @NotNull(message = "Collection time is required")
+    @DateTimeFormat(pattern = "HH:mm")
     @Pattern(regexp = "^([01]\\d|2[0-3]):([0-5]\\d)$", message = "Invalid time format")
-    private LocalTime collectionTime;
+    private String collectionTime;
 
     private boolean anyTime = false;
 

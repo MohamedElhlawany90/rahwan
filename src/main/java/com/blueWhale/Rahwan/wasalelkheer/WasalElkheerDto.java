@@ -1,6 +1,8 @@
-package com.blueWhale.Rahwan.orderorg;
+package com.blueWhale.Rahwan.wasalelkheer;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -11,7 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class OrderOrgDto {
+public class WasalElkheerDto {
 
     private Long id;
     private UUID userId;
@@ -21,15 +23,16 @@ public class OrderOrgDto {
     private String charityNameEn;
     private Double userLatitude;
     private Double userLongitude;
-    private OrderOrgType orderType;
+    private WasalElkheerType orderType;
     private String photo;
     private String additionalNotes;
     private LocalDate collectionDate;
+    @DateTimeFormat(pattern = "HH:mm")
     private LocalTime collectionTime;
     private boolean anyTime;
     private boolean allowInspection;
     private boolean shippingPaidByReceiver;
-    private OrderOrgStatus status;
+    private WasalElkheerStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

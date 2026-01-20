@@ -1,8 +1,6 @@
-
 package com.blueWhale.Rahwan.user;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
-//import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
 import com.blueWhale.Rahwan.util.ImageUtility;
 import com.blueWhale.Rahwan.wallet.Wallet;
 import com.blueWhale.Rahwan.wallet.WalletDto;
@@ -11,7 +9,6 @@ import com.blueWhale.Rahwan.wallet.WalletService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,37 +26,36 @@ public class UserService {
     private final UserMapper userMapper;
     private final WalletService walletService;
     private final WalletMapper walletMapper;
-    private final PasswordEncoder passwordEncoder ;
-//    private final JwtTokenProvider jwtTokenProvider;
+    private final PasswordEncoder passwordEncoder;
 
     public UserService(UserRepository userRepository, UserMapper userMapper,
-                       WalletService walletService, WalletMapper walletMapper, PasswordEncoder passwordEncoder) {
+                       WalletService walletService, WalletMapper walletMapper,
+                       PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.walletService = walletService;
         this.walletMapper = walletMapper;
         this.passwordEncoder = passwordEncoder;
-//        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     public UserDto createUser(UserForm form) {
 
         validatePhone(form.getPhone());
 
-       userRepository.findByPhone(form.getPhone())
-               .ifPresent(user -> {
-                   throw new ResourceNotFoundException("Phone already exists: " + form.getPhone());
-               });
+        userRepository.findByPhone(form.getPhone())
+                .ifPresent(user -> {
+                    throw new RuntimeException("Phone already exists: " + form.getPhone());
+                });
 
-       User user = userMapper.toEntity(form);
-       user.setPassword(passwordEncoder.encode(user.getPassword()));
-       User saved = userRepository.save(user);
+        User user = userMapper.toEntity(form);
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        User saved = userRepository.save(user);
 
-       walletService.createWalletForUser(saved);
+        walletService.createWalletForUser(saved);
+        
 
         return userMapper.toDto(saved);
     }
-
 
     public UserDto signIn(String phone, String password) {
         validatePhone(phone);
@@ -79,12 +75,7 @@ public class UserService {
             user.setActive(true);
             userRepository.save(user);
         }
-//        String token = jwtTokenProvider
-//                .generateToken(user.getId(), user.getPhone(), user.getType());
-//
-//        UserDto userDto = userMapper.toDto(user);
-//        userDto.setToken(token);
-//        return userDto;
+
         return userMapper.toDto(user);
     }
 
@@ -95,21 +86,21 @@ public class UserService {
                 .toList();
     }
 
-    public UserDto getUserById(UUID id){
+    public UserDto getUserById(UUID id) {
         User user = userRepository.findById(id)
-                .orElseThrow(()-> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
         return userMapper.toDto(user);
     }
 
-    public UserDto updateUser(UUID id, UserForm form){
+    public UserDto updateUser(UUID id, UserForm form) {
         validatePhone(form.getPhone());
 
         User user = userRepository.findById(id)
-                .orElseThrow(()-> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 
         userRepository.findByPhone(form.getPhone())
-                .filter(existingUser ->!existingUser.getId().equals(id))
-                .ifPresent(u ->{
+                .filter(existingUser -> !existingUser.getId().equals(id))
+                .ifPresent(u -> {
                     throw new RuntimeException("Phone already exists");
                 });
 
@@ -120,19 +111,18 @@ public class UserService {
 
         User updated = userRepository.save(user);
         return userMapper.toDto(updated);
-
     }
 
     public UserDto updateProfile(UUID userId, UpdateProfileForm form) throws IOException {
 
         User user = userRepository.findById(userId)
-                .orElseThrow(()-> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         validatePhone(form.getPhone());
 
         userRepository.findByPhone(form.getPhone())
                 .filter(u -> !u.getId().equals(userId))
-                .ifPresent(u-> {
+                .ifPresent(u -> {
                     throw new RuntimeException("Phone already exists");
                 });
 
@@ -165,23 +155,22 @@ public class UserService {
             perms.add(PosixFilePermission.OTHERS_READ);
             Files.setPosixFilePermissions(path, perms);
 
-            user.setProfileImage(fileName); // ✅ المهم ده
+            user.setProfileImage(fileName);
         }
-
 
         user.setActive(true);
 
-            User saved = userRepository.save(user);
-            return userMapper.toDto(saved);
+        User saved = userRepository.save(user);
+        return userMapper.toDto(saved);
     }
 
-   public void deleteUser(UUID id){
+    public void deleteUser(UUID id) {
         User user = userRepository.findById(id)
-                .orElseThrow(()-> new ResourceNotFoundException("User not found with id:" + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id:" + id));
 
         user.setActive(false);
         userRepository.save(user);
-   }
+    }
 
     public UserDto reactivateUser(UUID id) {
         User user = userRepository.findById(id)
@@ -201,32 +190,24 @@ public class UserService {
         return walletMapper.toDto(wallet);
     }
 
-    private void validatePhone(String phone){
-        if(phone == null || !phone.startsWith("20") || phone.length() != (12)){
-            throw new RuntimeException("Phone must start with 20 and be 12 digits");
-        }
-    }
-
-//    private String saveProfileImage(MultipartFile file){
-//        try {
-//            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-//            Path path = Paths.get("uploads/" + fileName);
-//            Files.createDirectories(path.getParent());
-//            Files.write(path, file.getBytes());
-//            return fileName;
-//        } catch (Exception e){
-//            throw new RuntimeException("Failed to save image");
-//        }
-//    }
-    public WalletDto updateUserBalance(UUID userId, double newBalance) {
+    /**
+     * إضافة رصيد للمستخدم - يرجع WalletDto كامل
+     */
+    public WalletDto updateUserBalance(UUID userId, double addedBalance) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        if (!user.isActive()){
+        if (!user.isActive()) {
             throw new RuntimeException("Cannot update balance for inactive user");
         }
-        Wallet updatedWallet = walletService.updateUserBalance(userId, newBalance);
-        return walletMapper.toDto(updatedWallet);
+
+        // استخدام الـ method الجديدة من WalletService
+        return walletService.addBalance(userId, addedBalance);
     }
 
+    private void validatePhone(String phone) {
+        if (phone == null || !phone.startsWith("20") || phone.length() != 12) {
+            throw new RuntimeException("Phone must start with 20 and be 12 digits");
+        }
+    }
 }

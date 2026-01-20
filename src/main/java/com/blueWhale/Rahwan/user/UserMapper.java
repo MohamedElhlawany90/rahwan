@@ -13,5 +13,7 @@ public interface UserMapper {
     User toEntity(UserForm form);
 
 
-    UserDto toDto(User user);
+    @Mapping(target = "walletBalance", expression = "java(user.getWallet() != null ? user.getWallet().getWalletBalance() : 0.0)")
+    @Mapping(target = "frozenBalance", expression = "java(user.getWallet() != null ? user.getWallet().getFrozenBalance() : 0.0)")
+    @Mapping(target = "totalBalance", expression = "java(user.getWallet() != null ? user.getWallet().getWalletBalance() + user.getWallet().getFrozenBalance() : 0.0)")    UserDto toDto(User user);
 }

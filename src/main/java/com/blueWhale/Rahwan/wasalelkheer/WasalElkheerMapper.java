@@ -1,14 +1,14 @@
-package com.blueWhale.Rahwan.orderorg;
+package com.blueWhale.Rahwan.wasalelkheer;
 
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
-public interface OrderOrgMapper {
+public interface WasalElkheerMapper {
 
     @Mapping(target = "photo", ignore = true)
     @Mapping(target = "userId", ignore = true)
-    OrderOrg toEntity(OrderOrgForm form);
+    WasalElkheer toEntity(WasalElkheerForm form);
 
-    OrderOrgDto toDto(OrderOrg orderOrg);
+    WasalElkheerDto toDto(WasalElkheer WasalElkheer);
 }

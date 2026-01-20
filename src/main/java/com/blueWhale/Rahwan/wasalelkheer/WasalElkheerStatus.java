@@ -1,6 +1,6 @@
-package com.blueWhale.Rahwan.orderorg;
+package com.blueWhale.Rahwan.wasalelkheer;
 
-public enum OrderOrgStatus {
+public enum WasalElkheerStatus {
     PENDING("Pending"),
     ACCEPTED("Accepted"),
     COLLECTED("Collected"),
@@ -9,7 +9,7 @@ public enum OrderOrgStatus {
 
     private final String displayName;
 
-    OrderOrgStatus(String displayName) {
+    WasalElkheerStatus(String displayName) {
         this.displayName = displayName;
     }
 

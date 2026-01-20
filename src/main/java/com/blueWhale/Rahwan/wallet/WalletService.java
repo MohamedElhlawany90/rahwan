@@ -1,8 +1,6 @@
-// ============================================
-// WalletService.java (Updated)
-// ============================================
 package com.blueWhale.Rahwan.wallet;
 
+import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,36 +15,78 @@ import java.util.UUID;
 public class WalletService {
 
     private final WalletRepository walletRepository;
+    private final WalletMapper walletMapper;
 
-    public Wallet createWalletForUser(User user){
-
+    /**
+     * إنشاء محفظة جديدة للمستخدم
+     */
+    public Wallet createWalletForUser(User user) {
         return walletRepository.findByUserId(user.getId())
-                .orElseGet(()-> {
-                    Wallet wallet = new Wallet();
-                    wallet.setUser(user);
-                    wallet.setBalance(0.0);
-                    wallet.setFrozenBalance(0.0);
-                    wallet.setCreatedAt(LocalDateTime.now());
+                .orElseGet(() -> {
+                    Wallet wallet = Wallet.builder()
+                            .user(user)
+                            .walletBalance(0.0)
+                            .frozenBalance(0.0)
+                            .createdAt(LocalDateTime.now())
+                            .build();
 
+                    user.setWallet(wallet);
                     return walletRepository.save(wallet);
                 });
     }
+
+    /**
+     * جلب المحفظة بـ Entity
+     */
     public Wallet getWalletByUserId(UUID userId) {
         return walletRepository.findByUserId(userId)
-                .orElseThrow(() -> new RuntimeException("Wallet not found for user: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found for user: " + userId));
+    }
+
+    /**
+     * جلب المحفظة بـ DTO
+     */
+    public WalletDto getWalletDtoByUserId(UUID userId) {
+        Wallet wallet = getWalletByUserId(userId);
+        return walletMapper.toDto(wallet);
+    }
+
+    /**
+     * إضافة رصيد للمحفظة
+     */
+    public WalletDto addBalance(UUID userId, double amount) {
+        if (amount <= 0) {
+            throw new RuntimeException("Amount must be positive");
+        }
+
+        Wallet wallet = getWalletByUserId(userId);
+        wallet.setWalletBalance(wallet.getWalletBalance() + amount);
+        Wallet updated = walletRepository.save(wallet);
+
+        return walletMapper.toDto(updated);
     }
 
     /**
      * تجميد مبلغ من الرصيد
      */
     public void freezeAmount(Wallet wallet, double amount) {
-        if (wallet.getBalance() < amount) {
-            throw new RuntimeException("Insufficient balance. Available: " + wallet.getBalance() + ", Required: " + amount);
+        if (wallet.getWalletBalance() < amount) {
+            throw new RuntimeException("Insufficient balance. Available: " +
+                    wallet.getWalletBalance() + ", Required: " + amount);
         }
 
-        wallet.setBalance(wallet.getBalance() - amount);
+        wallet.setWalletBalance(wallet.getWalletBalance() - amount);
         wallet.setFrozenBalance(wallet.getFrozenBalance() + amount);
         walletRepository.save(wallet);
+    }
+
+    /**
+     * تجميد مبلغ من الرصيد بـ userId
+     */
+    public WalletDto freezeAmountByUserId(UUID userId, double amount) {
+        Wallet wallet = getWalletByUserId(userId);
+        freezeAmount(wallet, amount);
+        return walletMapper.toDto(wallet);
     }
 
     /**
@@ -54,12 +94,22 @@ public class WalletService {
      */
     public void unfreezeAmount(Wallet wallet, double amount) {
         if (wallet.getFrozenBalance() < amount) {
-            throw new RuntimeException("Insufficient frozen balance");
+            throw new RuntimeException("Insufficient frozen balance. Available: " +
+                    wallet.getFrozenBalance() + ", Required: " + amount);
         }
 
         wallet.setFrozenBalance(wallet.getFrozenBalance() - amount);
-        wallet.setBalance(wallet.getBalance() + amount);
+        wallet.setWalletBalance(wallet.getWalletBalance() + amount);
         walletRepository.save(wallet);
+    }
+
+    /**
+     * فك تجميد مبلغ بـ userId
+     */
+    public WalletDto unfreezeAmountByUserId(UUID userId, double amount) {
+        Wallet wallet = getWalletByUserId(userId);
+        unfreezeAmount(wallet, amount);
+        return walletMapper.toDto(wallet);
     }
 
     /**
@@ -70,22 +120,27 @@ public class WalletService {
         Wallet toWallet = getWalletByUserId(toUserId);
 
         if (fromWallet.getFrozenBalance() < amount) {
-            throw new RuntimeException("Insufficient frozen balance in source wallet");
+            throw new RuntimeException("Insufficient frozen balance in source wallet. Available: " +
+                    fromWallet.getFrozenBalance() + ", Required: " + amount);
         }
 
         // خصم من المجمد
         fromWallet.setFrozenBalance(fromWallet.getFrozenBalance() - amount);
 
         // إضافة للرصيد العادي في المحفظة الثانية
-        toWallet.setBalance(toWallet.getBalance() + amount);
+        toWallet.setWalletBalance(toWallet.getWalletBalance() + amount);
 
         walletRepository.save(fromWallet);
         walletRepository.save(toWallet);
     }
 
-    public Wallet updateUserBalance(UUID userId, double newBalance) {
+    /**
+     * @deprecated Use addBalance instead
+     */
+    @Deprecated
+    public Wallet updateUserBalance(UUID userId, double addedBalance) {
         Wallet wallet = getWalletByUserId(userId);
-        wallet.setBalance(newBalance);
+        wallet.setWalletBalance(wallet.getWalletBalance() + addedBalance);
         return walletRepository.save(wallet);
     }
 }

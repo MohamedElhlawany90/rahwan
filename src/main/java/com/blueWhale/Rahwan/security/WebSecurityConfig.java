@@ -18,25 +18,24 @@ public class WebSecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable) // Disable CSRF
-                .cors(AbstractHttpConfigurer::disable) // Disable CORS (or configure if needed)
-                .sessionManagement(sessionManagement ->
-                        sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                ).httpBasic(HttpBasicConfigurer::disable).formLogin(FormLoginConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> {})
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                .httpBasic(HttpBasicConfigurer::disable)
+                .formLogin(FormLoginConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/advertisements/**").permitAll()
+
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/api/advertisements/**",
-                                "//api/charities**",
                                 "/swagger-ui/index.html",
                                 "/api/**",
-                                "/api/address/**",
-                                "/api/test/all",
                                 "/uploads/**"
-
                         ).permitAll()
 
                         .anyRequest().authenticated()
@@ -44,5 +43,4 @@ public class WebSecurityConfig {
 
         return http.build();
     }
-
 }

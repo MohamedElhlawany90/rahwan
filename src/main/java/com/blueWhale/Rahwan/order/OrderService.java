@@ -117,9 +117,9 @@ public class OrderService {
         Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
         double requiredBalance = order.getDeliveryCost() * 2;
 
-        if (userWallet.getBalance() < requiredBalance) {
+        if (userWallet.getWalletBalance() < requiredBalance) {
             throw new RuntimeException("Insufficient balance. Required: " + requiredBalance +
-                    ", Available: " + userWallet.getBalance());
+                    ", Available: " + userWallet.getWalletBalance());
         }
 
         // تجميد ضعف التكلفة
@@ -167,9 +167,9 @@ public class OrderService {
         Wallet driverWallet = walletService.getWalletByUserId(driverId);
         double productValue = order.getInsuranceValue();
 
-        if (driverWallet.getBalance() < productValue) {
+        if (driverWallet.getWalletBalance() < productValue) {
             throw new RuntimeException("Driver has insufficient balance for insurance. Required: " +
-                    productValue + ", Available: " + driverWallet.getBalance());
+                    productValue + ", Available: " + driverWallet.getWalletBalance());
         }
 
         walletService.freezeAmount(driverWallet, productValue);
@@ -293,8 +293,8 @@ public class OrderService {
         walletService.unfreezeAmount(driverWallet, order.getInsuranceValue());
 
         // تحويل تكلفة التوصيل من User إلى Driver
-        userWallet.setBalance(userWallet.getBalance() - order.getDeliveryCost());
-        driverWallet.setBalance(driverWallet.getBalance() + order.getDeliveryCost());
+        userWallet.setWalletBalance(userWallet.getWalletBalance() - order.getDeliveryCost());
+        driverWallet.setWalletBalance(driverWallet.getFrozenBalance() + order.getDeliveryCost());
 
         Order updated = orderRepository.save(order);
         return enrichDto(orderMapper.toDto(updated));

@@ -1,10 +1,11 @@
-package com.blueWhale.Rahwan.orderorg;
+package com.blueWhale.Rahwan.wasalelkheer;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,7 +18,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class OrderOrg {
+public class WasalElkheer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,7 +38,7 @@ public class OrderOrg {
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private OrderOrgType orderType;
+    private WasalElkheerType orderType;
 
     private String photo;
 
@@ -48,6 +49,7 @@ public class OrderOrg {
     private LocalDate collectionDate;
 
     @Column(nullable = false)
+    @DateTimeFormat(pattern = "HH:mm")
     private LocalTime collectionTime;
 
     @Column(nullable = false)
@@ -62,7 +64,7 @@ public class OrderOrg {
 
 //    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private OrderOrgStatus status = OrderOrgStatus.PENDING;
+    private WasalElkheerStatus status = WasalElkheerStatus.PENDING;
 
     @CreationTimestamp
     @Column(updatable = false)

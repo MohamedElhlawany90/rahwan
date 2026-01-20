@@ -1,6 +1,6 @@
-package com.blueWhale.Rahwan.orderorg;
+package com.blueWhale.Rahwan.wasalelkheer;
 
-public enum OrderOrgType {
+public enum WasalElkheerType {
     CLOTHES("Clothes"),
     FURNITURE("Furniture"),
     BOOKS("Books"),
@@ -11,7 +11,7 @@ public enum OrderOrgType {
 
     private final String displayName;
 
-    OrderOrgType(String displayName) {
+    WasalElkheerType(String displayName) {
         this.displayName = displayName;
     }
 

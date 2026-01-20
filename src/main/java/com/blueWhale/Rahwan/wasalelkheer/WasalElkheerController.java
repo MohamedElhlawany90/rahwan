@@ -1,4 +1,4 @@
-package com.blueWhale.Rahwan.orderorg;
+package com.blueWhale.Rahwan.wasalelkheer;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import jakarta.validation.Valid;
@@ -13,18 +13,18 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/order-org")
+@RequestMapping("/api/wasalElkheer")
 @RequiredArgsConstructor
-public class OrderOrgController {
+public class WasalElkheerController {
 
-    private final OrderOrgService orderOrgService;
+    private final WasalElkheerService WasalElkheerService;
 
     @PostMapping(value = "/create/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<OrderOrgDto> createOrder(
+    public ResponseEntity<WasalElkheerDto> createOrder(
             @PathVariable UUID userId,
-            @Valid @ModelAttribute OrderOrgForm form) {
+            @Valid @ModelAttribute WasalElkheerForm form) {
         try {
-            OrderOrgDto created = orderOrgService.createOrderOrg(form, userId);
+            WasalElkheerDto created = WasalElkheerService.createWasalElkheer(form, userId);
             return ResponseEntity.ok(created);
         } catch (ResourceNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
@@ -36,27 +36,27 @@ public class OrderOrgController {
     }
 
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<OrderOrgDto>> getUserOrders(@PathVariable UUID userId) {
-        List<OrderOrgDto> orders = orderOrgService.getUserOrders(userId);
+    public ResponseEntity<List<WasalElkheerDto>> getUserOrders(@PathVariable UUID userId) {
+        List<WasalElkheerDto> orders = WasalElkheerService.getUserOrders(userId);
         return ResponseEntity.ok(orders);
     }
 
     @GetMapping("/charity/{charityId}")
-    public ResponseEntity<List<OrderOrgDto>> getCharityOrders(@PathVariable Long charityId) {
-        List<OrderOrgDto> orders = orderOrgService.getCharityOrders(charityId);
+    public ResponseEntity<List<WasalElkheerDto>> getCharityOrders(@PathVariable Long charityId) {
+        List<WasalElkheerDto> orders = WasalElkheerService.getCharityOrders(charityId);
         return ResponseEntity.ok(orders);
     }
 
     @GetMapping("/status/{status}")
-    public ResponseEntity<List<OrderOrgDto>> getOrdersByStatus(@PathVariable OrderOrgStatus status) {
-        List<OrderOrgDto> orders = orderOrgService.getOrdersByStatus(status);
+    public ResponseEntity<List<WasalElkheerDto>> getOrdersByStatus(@PathVariable WasalElkheerStatus status) {
+        List<WasalElkheerDto> orders = WasalElkheerService.getOrdersByStatus(status);
         return ResponseEntity.ok(orders);
     }
 
     @GetMapping("/{orderId}")
-    public ResponseEntity<OrderOrgDto> getOrderById(@PathVariable Long orderId) {
+    public ResponseEntity<WasalElkheerDto> getOrderById(@PathVariable Long orderId) {
         try {
-            OrderOrgDto order = orderOrgService.getOrderById(orderId);
+            WasalElkheerDto order = WasalElkheerService.getOrderById(orderId);
             return ResponseEntity.ok(order);
         } catch (ResourceNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
@@ -64,11 +64,11 @@ public class OrderOrgController {
     }
 
     @PutMapping("/{orderId}/status")
-    public ResponseEntity<OrderOrgDto> updateOrderStatus(
+    public ResponseEntity<WasalElkheerDto> updateOrderStatus(
             @PathVariable Long orderId,
-            @RequestParam OrderOrgStatus status) {
+            @RequestParam WasalElkheerStatus status) {
         try {
-            OrderOrgDto updated = orderOrgService.updateOrderStatus(orderId, status);
+            WasalElkheerDto updated = WasalElkheerService.updateOrderStatus(orderId, status);
             return ResponseEntity.ok(updated);
         } catch (ResourceNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
@@ -76,8 +76,8 @@ public class OrderOrgController {
     }
 
     @GetMapping
-    public ResponseEntity<List<OrderOrgDto>> getAllOrders() {
-        List<OrderOrgDto> orders = orderOrgService.getAllOrders();
+    public ResponseEntity<List<WasalElkheerDto>> getAllOrders() {
+        List<WasalElkheerDto> orders = WasalElkheerService.getAllOrders();
         return ResponseEntity.ok(orders);
     }
 }

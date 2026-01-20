@@ -19,7 +19,7 @@ public class Wallet {
     private Long id;
 
     @Column(nullable = false)
-    private double balance;
+    private double walletBalance;
 
     @Column(nullable = false)
     private double frozenBalance;

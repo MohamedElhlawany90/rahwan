@@ -45,6 +45,10 @@ public class OrderController {
             throw new RuntimeException(e);
         }
     }
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<OrderDto> confirmOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(orderService.confirmOrder(id));
+    }
 
     /**
      * 2. Driver: قبول الطلب
@@ -142,10 +146,6 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrderByTrackingNumber(trackingNumber));
     }
 
-    @PostMapping("/{id}/confirm")
-    public ResponseEntity<OrderDto> confirmOrder(@PathVariable Long id) {
-        return ResponseEntity.ok(orderService.confirmOrder(id));
-    }
 
     @GetMapping("/user/{userId}/countByStatus")
     public ResponseEntity<OrderStatusCounts> getUserOrderCounts(@PathVariable UUID userId) {

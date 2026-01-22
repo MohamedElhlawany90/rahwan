@@ -13,7 +13,7 @@ import java.time.LocalTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "order_org")
+@Table(name = "wasal_elkheer")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

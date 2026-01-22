@@ -19,7 +19,6 @@ public class WhatsAppService {
                 Code: %s
 
                 ⚠️ Do not share this code with anyone.
-                Valid for 10 minutes.
                 """.formatted(otp);
 
         send(phone, message);
@@ -115,5 +114,9 @@ public class WhatsAppService {
         }
 
         return normalized + "@c.us";
+    }
+
+    public void sendOrderConfirmation(String phone) {
+
     }
 }

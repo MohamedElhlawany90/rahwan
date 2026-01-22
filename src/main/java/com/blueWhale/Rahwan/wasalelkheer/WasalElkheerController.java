@@ -1,6 +1,7 @@
 package com.blueWhale.Rahwan.wasalelkheer;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
+import com.blueWhale.Rahwan.order.OrderDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,14 +18,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WasalElkheerController {
 
-    private final WasalElkheerService WasalElkheerService;
+    private final WasalElkheerService wasalElkheerService;
 
     @PostMapping(value = "/create/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<WasalElkheerDto> createOrder(
             @PathVariable UUID userId,
             @Valid @ModelAttribute WasalElkheerForm form) {
         try {
-            WasalElkheerDto created = WasalElkheerService.createWasalElkheer(form, userId);
+            WasalElkheerDto created = wasalElkheerService.createWasalElkheer(form, userId);
             return ResponseEntity.ok(created);
         } catch (ResourceNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
@@ -35,28 +36,33 @@ public class WasalElkheerController {
         }
     }
 
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<WasalElkheerDto> confirmOrder(@PathVariable Long id) {
+        return ResponseEntity.ok(wasalElkheerService.confirmOrder(id));
+    }
+
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<WasalElkheerDto>> getUserOrders(@PathVariable UUID userId) {
-        List<WasalElkheerDto> orders = WasalElkheerService.getUserOrders(userId);
+        List<WasalElkheerDto> orders = wasalElkheerService.getUserOrders(userId);
         return ResponseEntity.ok(orders);
     }
 
     @GetMapping("/charity/{charityId}")
     public ResponseEntity<List<WasalElkheerDto>> getCharityOrders(@PathVariable Long charityId) {
-        List<WasalElkheerDto> orders = WasalElkheerService.getCharityOrders(charityId);
+        List<WasalElkheerDto> orders = wasalElkheerService.getCharityOrders(charityId);
         return ResponseEntity.ok(orders);
     }
 
     @GetMapping("/status/{status}")
     public ResponseEntity<List<WasalElkheerDto>> getOrdersByStatus(@PathVariable WasalElkheerStatus status) {
-        List<WasalElkheerDto> orders = WasalElkheerService.getOrdersByStatus(status);
+        List<WasalElkheerDto> orders = wasalElkheerService.getOrdersByStatus(status);
         return ResponseEntity.ok(orders);
     }
 
     @GetMapping("/{orderId}")
     public ResponseEntity<WasalElkheerDto> getOrderById(@PathVariable Long orderId) {
         try {
-            WasalElkheerDto order = WasalElkheerService.getOrderById(orderId);
+            WasalElkheerDto order = wasalElkheerService.getOrderById(orderId);
             return ResponseEntity.ok(order);
         } catch (ResourceNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
@@ -68,7 +74,7 @@ public class WasalElkheerController {
             @PathVariable Long orderId,
             @RequestParam WasalElkheerStatus status) {
         try {
-            WasalElkheerDto updated = WasalElkheerService.updateOrderStatus(orderId, status);
+            WasalElkheerDto updated = wasalElkheerService.updateOrderStatus(orderId, status);
             return ResponseEntity.ok(updated);
         } catch (ResourceNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
@@ -77,7 +83,7 @@ public class WasalElkheerController {
 
     @GetMapping
     public ResponseEntity<List<WasalElkheerDto>> getAllOrders() {
-        List<WasalElkheerDto> orders = WasalElkheerService.getAllOrders();
+        List<WasalElkheerDto> orders = wasalElkheerService.getAllOrders();
         return ResponseEntity.ok(orders);
     }
 }

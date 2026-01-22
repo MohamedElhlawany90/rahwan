@@ -3,6 +3,7 @@
 // ============================================
 package com.blueWhale.Rahwan.order;
 
+import com.blueWhale.Rahwan.exception.BusinessException;
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.otp.OtpRequest;
 import jakarta.validation.Valid;
@@ -59,6 +60,31 @@ public class OrderController {
             @RequestParam UUID driverId) {
         return ResponseEntity.ok(orderService.driverConfirmOrder(orderId, driverId));
     }
+
+    @PutMapping(
+            value = "/update/{orderId}/{userId}",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<CreationDto> updateOrder(
+            @PathVariable Long orderId,
+            @PathVariable UUID userId,
+            @ModelAttribute OrderForm orderForm
+    ) {
+        try {
+            CreationDto dto = orderService.updateOrder(orderId, orderForm, userId);
+            return ResponseEntity.ok(dto);
+
+        } catch (ResourceNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+
+        } catch (BusinessException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
 
     /**
      * 3. Driver: تأكيد الاستلام

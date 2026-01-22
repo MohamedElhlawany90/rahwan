@@ -1,5 +1,7 @@
 package com.blueWhale.Rahwan.wasalelkheer;
 
+import com.blueWhale.Rahwan.order.CreationDto;
+import com.blueWhale.Rahwan.order.Order;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -11,4 +13,8 @@ public interface WasalElkheerMapper {
     WasalElkheer toEntity(WasalElkheerForm form);
 
     WasalElkheerDto toDto(WasalElkheer WasalElkheer);
+
+    @Mapping(source = "photo", target = "photo")
+    @Mapping(source = "creationStatus", target = "status")
+    CreationWasalElkheerDto toCreationWasalDto(WasalElkheer wasalElkheer);
 }

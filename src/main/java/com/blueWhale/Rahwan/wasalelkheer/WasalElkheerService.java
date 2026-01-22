@@ -4,7 +4,7 @@ import com.blueWhale.Rahwan.charity.Charity;
 import com.blueWhale.Rahwan.charity.CharityRepository;
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.notification.WhatsAppService;
-import com.blueWhale.Rahwan.order.CreationStatus;
+import com.blueWhale.Rahwan.order.CreationDto;
 import com.blueWhale.Rahwan.order.Order;
 import com.blueWhale.Rahwan.order.OrderDto;
 import com.blueWhale.Rahwan.order.OrderStatus;
@@ -36,7 +36,7 @@ public class WasalElkheerService {
     private final CharityRepository charityRepository;
     private final WhatsAppService whatsAppService;
 
-    public WasalElkheerDto createWasalElkheer(WasalElkheerForm form, UUID userId) throws IOException {
+    public CreationWasalElkheerDto createWasalElkheer(WasalElkheerForm form, UUID userId) throws IOException {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -75,20 +75,20 @@ public class WasalElkheerService {
             Files.setPosixFilePermissions(path, perms);
             wasalElkheer.setPhoto(url.substring(url.lastIndexOf("/") + 1));
         }
-        wasalElkheer.setStatus(WasalElkheerStatus.PENDING);
+        wasalElkheer.setCreationStatus(CreationStatus.CREATED);
 
         WasalElkheer saved = wasalElkheerRepository.save(wasalElkheer);
-        return enrichDto(wasalElkheerMapper.toDto(saved));
+        return enrichCreationDto(wasalElkheerMapper.toCreationWasalDto(saved));
     }
 
     public WasalElkheerDto confirmOrder(Long orderId) {
         WasalElkheer order = wasalElkheerRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-        if (order.getStatus() != WasalElkheerStatus.PENDING) {
-            throw new RuntimeException("Order must be in Pending status to confirm");
+        if (order.getCreationStatus() != CreationStatus.CREATED) {
+            throw new RuntimeException("Order must be in Created status to confirm");
         }
-        order.setStatus(WasalElkheerStatus.ACCEPTED);
+        order.setStatus(WasalElkheerStatus.PENDING);
 
         WasalElkheer updated = wasalElkheerRepository.save(order);
 
@@ -153,7 +153,6 @@ public class WasalElkheerService {
                     dto.setUserName(user.getName())
             );
         }
-
         if (dto.getCharityId() != null) {
             charityRepository.findById(dto.getCharityId()).ifPresent(charity -> {
                 dto.setCharityNameAr(charity.getNameAr());
@@ -162,5 +161,19 @@ public class WasalElkheerService {
         }
 
         return dto;
+    }
+
+    private CreationWasalElkheerDto enrichCreationDto(CreationWasalElkheerDto creationDto) {
+        if (creationDto.getUserId() != null) {
+            userRepository.findById(creationDto.getUserId()).ifPresent(user ->
+                    creationDto.setUserName(user.getName())
+            );
+        }
+        if (creationDto.getDriverId() != null) {
+            userRepository.findById(creationDto.getDriverId()).ifPresent(driver ->
+                    creationDto.setDriverName(driver.getName())
+            );
+        }
+        return creationDto;
     }
 }

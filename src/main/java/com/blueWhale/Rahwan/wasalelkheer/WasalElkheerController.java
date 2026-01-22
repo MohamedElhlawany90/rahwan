@@ -21,11 +21,11 @@ public class WasalElkheerController {
     private final WasalElkheerService wasalElkheerService;
 
     @PostMapping(value = "/create/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<WasalElkheerDto> createOrder(
+    public ResponseEntity<CreationWasalElkheerDto> createOrder(
             @PathVariable UUID userId,
             @Valid @ModelAttribute WasalElkheerForm form) {
         try {
-            WasalElkheerDto created = wasalElkheerService.createWasalElkheer(form, userId);
+            CreationWasalElkheerDto created = wasalElkheerService.createWasalElkheer(form, userId);
             return ResponseEntity.ok(created);
         } catch (ResourceNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);

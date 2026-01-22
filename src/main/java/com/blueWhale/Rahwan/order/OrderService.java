@@ -144,6 +144,90 @@ public class OrderService {
         return enrichDto(orderMapper.toDto(updated));
     }
 
+    public CreationDto updateOrder(Long orderId, OrderForm orderForm, UUID userId) throws IOException {
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // تأكد إن الاوردر تابع لنفس اليوزر
+        if (!order.getUserId().equals(userId)) {
+            throw new BusinessException("You are not allowed to update this order");
+        }
+
+        // مينفعش نعدل بعد مراحل معينة
+        if (order.getStatus() != null && order.getStatus() != OrderStatus.PENDING) {
+            throw new BusinessException("Order cannot be updated in current status");
+        }
+
+        // إعادة حساب التكلفة
+        PricingDetails cost = costCalculationService.calculateCost(
+                orderForm.getPickupLatitude(),
+                orderForm.getPickupLongitude(),
+                orderForm.getRecipientLatitude(),
+                orderForm.getRecipientLongitude(),
+                orderForm.getInsuranceValue()
+        );
+
+        // تحديث البيانات العادية
+        order.setPickupLatitude(orderForm.getPickupLatitude());
+        order.setPickupLongitude(orderForm.getPickupLongitude());
+        order.setPickupAddress(orderForm.getPickupAddress());
+
+        order.setRecipientLatitude(orderForm.getRecipientLatitude());
+        order.setRecipientLongitude(orderForm.getRecipientLongitude());
+        order.setRecipientAddress(orderForm.getRecipientAddress());
+        order.setRecipientName(orderForm.getRecipientName());
+        order.setRecipientPhone(orderForm.getRecipientPhone());
+
+        order.setOrderType(orderForm.getOrderType());
+        order.setInsuranceValue(orderForm.getInsuranceValue());
+        order.setAdditionalNotes(orderForm.getAdditionalNotes());
+
+        order.setCollectionDate(orderForm.getCollectionDate());
+        order.setCollectionTime(orderForm.getCollectionTime());
+
+        order.setAnyTime(orderForm.getAnyTime());
+        order.setAllowInspection(orderForm.getAllowInspection());
+        order.setReceiverPaysShipping(orderForm.getReceiverPaysShipping());
+
+        // تحديث التكلفة
+        order.setDeliveryCost(cost.getTotalCost());
+        order.setDistanceKm(cost.getDistanceKm());
+
+        // 📸 تحديث الصورة (لو اتبعتت)
+        Path uploadDir = Paths.get(UPLOADED_FOLDER);
+
+        if (orderForm.getPhoto() != null && !orderForm.getPhoto().isEmpty()) {
+
+            if (!Files.exists(uploadDir)) {
+                Files.createDirectories(uploadDir);
+            }
+
+            byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
+
+            String fileName = new Date().getTime()
+                    + "A-A"
+                    + orderForm.getPhoto().getOriginalFilename();
+
+            Path path = uploadDir.resolve(fileName);
+
+            Files.write(path, bytes);
+
+            Set<PosixFilePermission> perms = new HashSet<>();
+            perms.add(PosixFilePermission.OWNER_READ);
+            perms.add(PosixFilePermission.OWNER_WRITE);
+            perms.add(PosixFilePermission.GROUP_READ);
+            perms.add(PosixFilePermission.OTHERS_READ);
+            Files.setPosixFilePermissions(path, perms);
+
+            order.setPhoto(fileName);
+        }
+
+        Order saved = orderRepository.save(order);
+        return enrichCreationDto(orderMapper.toCreationDto(saved));
+    }
+
+
     /**
      * 3. السائق يقبل الطلب
      */

@@ -65,6 +65,9 @@ public class WasalElkheer {
 //    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private WasalElkheerStatus status = WasalElkheerStatus.PENDING;
+    
+    @Enumerated(EnumType.STRING)
+    private CreationStatus creationStatus = CreationStatus.CREATED ;
 
     @CreationTimestamp
     @Column(updatable = false)

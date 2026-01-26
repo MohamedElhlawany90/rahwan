@@ -30,21 +30,11 @@ public class OrderController {
     @PostMapping(value = "/create/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CreationDto> createOrder(
             @PathVariable UUID userId,
-            @ModelAttribute OrderForm orderForm
+            @ModelAttribute OrderForm orderForm) throws IOException {
 
-    ) {
-        try {
             CreationDto creationDto = orderService.createOrder(orderForm, userId);
             return ResponseEntity.ok(creationDto);
-        } catch (ResourceNotFoundException ex) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(null);
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(null);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+
     }
     @PostMapping("/{id}/confirm")
     public ResponseEntity<OrderDto> confirmOrder(@PathVariable Long id) {
@@ -68,21 +58,11 @@ public class OrderController {
     public ResponseEntity<CreationDto> updateOrder(
             @PathVariable Long orderId,
             @PathVariable UUID userId,
-            @ModelAttribute OrderForm orderForm
-    ) {
-        try {
+            @ModelAttribute OrderForm orderForm) throws IOException{
+
             CreationDto dto = orderService.updateOrder(orderId, orderForm, userId);
             return ResponseEntity.ok(dto);
 
-        } catch (ResourceNotFoundException ex) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-
-        } catch (BusinessException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
     }
 
 

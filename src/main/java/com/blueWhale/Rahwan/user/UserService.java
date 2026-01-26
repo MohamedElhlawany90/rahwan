@@ -1,11 +1,13 @@
 package com.blueWhale.Rahwan.user;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
+//import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
 import com.blueWhale.Rahwan.util.ImageUtility;
 import com.blueWhale.Rahwan.wallet.Wallet;
 import com.blueWhale.Rahwan.wallet.WalletDto;
 import com.blueWhale.Rahwan.wallet.WalletMapper;
 import com.blueWhale.Rahwan.wallet.WalletService;
+import io.jsonwebtoken.Jwt;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ public class UserService {
     private final WalletService walletService;
     private final WalletMapper walletMapper;
     private final PasswordEncoder passwordEncoder;
+//    private final JwtTokenProvider jwtTokenProvider ;
 
     public UserService(UserRepository userRepository, UserMapper userMapper,
                        WalletService walletService, WalletMapper walletMapper,
@@ -36,6 +39,7 @@ public class UserService {
         this.walletService = walletService;
         this.walletMapper = walletMapper;
         this.passwordEncoder = passwordEncoder;
+//        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     public UserDto createUser(UserForm form) {
@@ -71,10 +75,12 @@ public class UserService {
             throw new RuntimeException("Phone not verified");
         }
 
-        if (!user.isActive()) {
-            user.setActive(true);
-            userRepository.save(user);
-        }
+//        if (!user.isActive()) {
+//            user.setActive(true);
+//            userRepository.save(user);
+//        }
+//        String token = jwtTokenProvider
+//                .generateToken(user.getId(),user.getPhone(),user.getType());
 
         return userMapper.toDto(user);
     }

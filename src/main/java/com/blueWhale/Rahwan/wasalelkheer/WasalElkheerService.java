@@ -169,11 +169,11 @@ public class WasalElkheerService {
                     creationDto.setUserName(user.getName())
             );
         }
-        if (creationDto.getDriverId() != null) {
-            userRepository.findById(creationDto.getDriverId()).ifPresent(driver ->
-                    creationDto.setDriverName(driver.getName())
-            );
-        }
+//        if (creationDto.getDriverId() != null) {
+//            userRepository.findById(creationDto.getDriverId()).ifPresent(driver ->
+//                    creationDto.setDriverName(driver.getName())
+//            );
+//        }
         return creationDto;
     }
 }

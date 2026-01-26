@@ -1,12 +1,16 @@
 package com.blueWhale.Rahwan.wasalelkheer;
 
-import com.blueWhale.Rahwan.order.CreationStatus;
-import com.blueWhale.Rahwan.order.OrderType;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -19,56 +23,58 @@ import java.util.UUID;
 @Builder
 public class CreationWasalElkheerDto {
     private Long id;
+
+    @Column(nullable = false)
     private UUID userId;
-    private UUID driverId;
+
     private String userName;
-    private String driverName;
 
-    // Pickup Location
-    private double pickupLatitude;
-    private double pickupLongitude;
-    private String pickupAddress;
+    @Column(nullable = false)
+    private Long charityId;
 
-    // Recipient Location
-    private double recipientLatitude;
-    private double recipientLongitude;
-    private String recipientAddress;
+    @Column(nullable = false)
+    private Double userLatitude;
 
-    // Recipient Details
-    private String recipientName;
-    private String recipientPhone;
+    @Column(nullable = false)
+    private Double userLongitude;
 
-    // Order Details
-    private WasalElkheerType wasalElkheerType;
-    private double insuranceValue;
-    private double deliveryCost;
+    private String address;
+
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private WasalElkheerType orderType;
+
     private String photo;
+
+    @Column(columnDefinition = "TEXT")
     private String additionalNotes;
 
-    // Collection Time
+    @Column(nullable = false)
     private LocalDate collectionDate;
 
-    @JsonFormat(pattern = "HH:mm")
+    @Column(nullable = false)
+    @DateTimeFormat(pattern = "HH:mm")
     private LocalTime collectionTime;
 
-    private Boolean anyTime;
+    @Column(nullable = false)
+    @JsonFormat(pattern = "HH:mm")
+    private boolean anyTime = false;
 
-    // Options
-    private Boolean allowInspection;
-    private Boolean receiverPaysShipping;
+    @Column(nullable = false)
+    private boolean allowInspection = false;
 
-    // Status
+    @Column(nullable = false)
+    private boolean shippingPaidByReceiver = false;
+
+    //    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
     private CreationStatus status ;
-    private String trackingNumber;
-    private double distanceKm;
 
-    // OTP Status (don't expose actual OTPs)
-    private boolean pickupConfirmed;
-    private boolean deliveryConfirmed;
 
-    // Timestamps
+    @CreationTimestamp
+    @Column(updatable = false)
     private LocalDateTime createdAt;
-    private LocalDateTime confirmedAt;
-    private LocalDateTime pickedUpAt;
-    private LocalDateTime deliveredAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

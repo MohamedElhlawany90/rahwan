@@ -23,6 +23,7 @@ public class WasalElkheerDto {
     private String charityNameEn;
     private Double userLatitude;
     private Double userLongitude;
+    private String address;
     private WasalElkheerType orderType;
     private String photo;
     private String additionalNotes;

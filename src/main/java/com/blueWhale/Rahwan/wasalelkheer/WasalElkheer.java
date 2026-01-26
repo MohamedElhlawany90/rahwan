@@ -36,6 +36,8 @@ public class WasalElkheer {
     @Column(nullable = false)
     private Double userLongitude;
 
+    private String address;
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private WasalElkheerType orderType;

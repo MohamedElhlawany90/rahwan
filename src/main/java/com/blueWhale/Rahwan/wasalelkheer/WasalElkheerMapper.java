@@ -16,5 +16,6 @@ public interface WasalElkheerMapper {
 
     @Mapping(source = "photo", target = "photo")
     @Mapping(source = "creationStatus", target = "status")
+    @Mapping(source = "address", target = "address")
     CreationWasalElkheerDto toCreationWasalDto(WasalElkheer wasalElkheer);
 }

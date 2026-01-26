@@ -22,6 +22,8 @@ public class WasalElkheerForm {
     @NotNull(message = "User longitude is required")
     private Double userLongitude;
 
+    private String address;
+
     @NotNull(message = "Charity ID is required")
     private Long charityId;
 

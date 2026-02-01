@@ -36,7 +36,7 @@ public class UserController {
     }
 
     @PostMapping("/signin")
-    public ResponseEntity<UserDto> signIn(@RequestBody SignInForm form) {
+    public ResponseEntity<SignInDto> signIn(@RequestBody SignInForm form) {
 
         return ResponseEntity.ok(userService.signIn(form.getPhone(), form.getPassword()));
 

@@ -6,11 +6,13 @@ package com.blueWhale.Rahwan.order;
 import com.blueWhale.Rahwan.exception.BusinessException;
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.otp.OtpRequest;
+import com.blueWhale.Rahwan.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -27,15 +29,19 @@ public class OrderController {
     /**
      * 1. User: إنشاء طلب جديد
      */
-    @PostMapping(value = "/create/{userId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(
+            value = "/create",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
     public ResponseEntity<CreationDto> createOrder(
-            @PathVariable UUID userId,
-            @ModelAttribute OrderForm orderForm) throws IOException {
+            @AuthenticationPrincipal UserPrincipal principal, // 🔐 JWT
+            @ModelAttribute OrderForm orderForm
+    ) throws IOException {
 
-            CreationDto creationDto = orderService.createOrder(orderForm, userId);
-            return ResponseEntity.ok(creationDto);
-
+        CreationDto creationDto = orderService.createOrder(orderForm, principal.getId());
+        return ResponseEntity.ok(creationDto);
     }
+
     @PostMapping("/{id}/confirm")
     public ResponseEntity<OrderDto> confirmOrder(@PathVariable Long id) {
         return ResponseEntity.ok(orderService.confirmOrder(id));
@@ -47,24 +53,26 @@ public class OrderController {
     @PostMapping("/{orderId}/confirm-by-driver")
     public ResponseEntity<OrderDto> driverConfirmOrder(
             @PathVariable Long orderId,
-            @RequestParam UUID driverId) {
-        return ResponseEntity.ok(orderService.driverConfirmOrder(orderId, driverId));
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                orderService.driverConfirmOrder(orderId, principal.getId())
+        );
     }
 
     @PutMapping(
-            value = "/update/{orderId}/{userId}",
+            value = "/update/{orderId}",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
     public ResponseEntity<CreationDto> updateOrder(
             @PathVariable Long orderId,
-            @PathVariable UUID userId,
-            @ModelAttribute OrderForm orderForm) throws IOException{
+            @AuthenticationPrincipal UserPrincipal principal, // 🔐
+            @ModelAttribute OrderForm orderForm
+    ) throws IOException {
 
-            CreationDto dto = orderService.updateOrder(orderId, orderForm, userId);
-            return ResponseEntity.ok(dto);
-
+        CreationDto dto = orderService.updateOrder(orderId, orderForm, principal.getId());
+        return ResponseEntity.ok(dto);
     }
-
 
     /**
      * 3. Driver: تأكيد الاستلام
@@ -72,8 +80,11 @@ public class OrderController {
     @PostMapping("/{orderId}/confirm-pickup")
     public ResponseEntity<OrderDto> confirmPickup(
             @PathVariable Long orderId,
-            @Valid @RequestBody OtpRequest otpRequest) {
-        return ResponseEntity.ok(orderService.confirmPickup(orderId, otpRequest.getOtp()));
+            @Valid @RequestBody OtpRequest otpRequest
+    ) {
+        return ResponseEntity.ok(
+                orderService.confirmPickup(orderId, otpRequest.getOtp())
+        );
     }
 
     /**
@@ -82,8 +93,11 @@ public class OrderController {
     @PostMapping("/{orderId}/confirm-delivery")
     public ResponseEntity<OrderDto> confirmDelivery(
             @PathVariable Long orderId,
-            @Valid @RequestBody OtpRequest otpRequest) {
-        return ResponseEntity.ok(orderService.confirmDelivery(orderId, otpRequest.getOtp()));
+            @Valid @RequestBody OtpRequest otpRequest
+    ) {
+        return ResponseEntity.ok(
+                orderService.confirmDelivery(orderId, otpRequest.getOtp())
+        );
     }
 
     /**
@@ -105,17 +119,25 @@ public class OrderController {
     /**
      * 7. جلب طلبات المستخدم
      */
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<OrderDto>> getUserOrders(@PathVariable UUID userId) {
-        return ResponseEntity.ok(orderService.getUserOrders(userId));
+    @GetMapping("/user")
+    public ResponseEntity<List<OrderDto>> getUserOrders(
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                orderService.getUserOrders(principal.getId())
+        );
     }
 
     /**
      * 8. جلب طلبات السائق
      */
-    @GetMapping("/driver/{driverId}")
-    public ResponseEntity<List<OrderDto>> getDriverOrders(@PathVariable UUID driverId) {
-        return ResponseEntity.ok(orderService.getDriverOrders(driverId));
+    @GetMapping("/driver")
+    public ResponseEntity<List<OrderDto>> getDriverOrders(
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                orderService.getDriverOrders(principal.getId())
+        );
     }
 
     /**
@@ -132,8 +154,14 @@ public class OrderController {
     @GetMapping("/status/{status}")
     public ResponseEntity<List<OrderDto>> getOrdersByStatus(
             @PathVariable OrderStatus status,
-            @RequestParam UUID userId) {
-        return ResponseEntity.ok(orderService.getOrdersByUserAndStatus(userId, status));
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                orderService.getOrdersByUserAndStatus(
+                        principal.getId(),
+                        status
+                )
+        );
     }
 
     /**
@@ -145,30 +173,40 @@ public class OrderController {
     }
 
     /**
-     * 12. تتبع طلب
+     * 12. تتبع طلب (عام – بدون توكين)
      */
     @GetMapping("/track/{trackingNumber}")
-    public ResponseEntity<OrderDto> trackOrder(@PathVariable String trackingNumber) {
-        return ResponseEntity.ok(orderService.getOrderByTrackingNumber(trackingNumber));
+    public ResponseEntity<OrderDto> trackOrder(
+            @PathVariable String trackingNumber
+    ) {
+        return ResponseEntity.ok(
+                orderService.getOrderByTrackingNumber(trackingNumber)
+        );
     }
 
-
-    @GetMapping("/user/{userId}/countByStatus")
-    public ResponseEntity<OrderStatusCounts> getUserOrderCounts(@PathVariable UUID userId) {
-        return ResponseEntity.ok(orderService.getOrdersCountsByUser(userId));
+    @GetMapping("/countByStatus")
+    public ResponseEntity<OrderStatusCounts> getUserOrderCounts(
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                orderService.getOrdersCountsByUser(principal.getId())
+        );
     }
 
     @GetMapping
     public ResponseEntity<List<OrderDto>> getAllOrders() {
-
         return ResponseEntity.ok(orderService.getAllOrders());
     }
 
     @GetMapping("/statistics")
-    public ResponseEntity<OrderStatisticsDto> getOrderStatistics(UUID userId){
-
-        return ResponseEntity.ok(orderService.getOrderStatistics(userId));
+    public ResponseEntity<OrderStatisticsDto> getOrderStatistics(
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                orderService.getOrderStatistics(principal.getId())
+        );
     }
+
     @PatchMapping("/{orderId}/status")
     public ResponseEntity<OrderDto> changeOrderStatus(
             @PathVariable Long orderId,
@@ -178,5 +216,4 @@ public class OrderController {
                 orderService.changeOrderStatus(orderId, status)
         );
     }
-
 }

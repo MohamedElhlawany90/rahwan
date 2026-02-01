@@ -2,6 +2,7 @@ package com.blueWhale.Rahwan.user;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 //import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
+import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
 import com.blueWhale.Rahwan.util.ImageUtility;
 import com.blueWhale.Rahwan.wallet.Wallet;
 import com.blueWhale.Rahwan.wallet.WalletDto;
@@ -29,17 +30,17 @@ public class UserService {
     private final WalletService walletService;
     private final WalletMapper walletMapper;
     private final PasswordEncoder passwordEncoder;
-//    private final JwtTokenProvider jwtTokenProvider ;
+    private final JwtTokenProvider jwtTokenProvider ;
 
     public UserService(UserRepository userRepository, UserMapper userMapper,
                        WalletService walletService, WalletMapper walletMapper,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.walletService = walletService;
         this.walletMapper = walletMapper;
         this.passwordEncoder = passwordEncoder;
-//        this.jwtTokenProvider = jwtTokenProvider;
+        this.jwtTokenProvider = jwtTokenProvider;
     }
 
     public UserDto createUser(UserForm form) {
@@ -61,7 +62,7 @@ public class UserService {
         return userMapper.toDto(saved);
     }
 
-    public UserDto signIn(String phone, String password) {
+    public SignInDto signIn(String phone, String password) {
         validatePhone(phone);
 
         User user = userRepository.findByPhone(phone)
@@ -75,14 +76,17 @@ public class UserService {
             throw new RuntimeException("Phone not verified");
         }
 
-//        if (!user.isActive()) {
-//            user.setActive(true);
-//            userRepository.save(user);
-//        }
-//        String token = jwtTokenProvider
-//                .generateToken(user.getId(),user.getPhone(),user.getType());
+        if (!user.isActive()) {
+            user.setActive(true);
+            userRepository.save(user);
+        }
+        String token = jwtTokenProvider
+                .generateToken(user.getId(),user.getPhone(),user.getType());
 
-        return userMapper.toDto(user);
+        SignInDto userDto = userMapper.toSignInDto(user);
+        userDto.setToken(token);
+
+        return userDto;
     }
 
     public List<UserDto> getAllUsers() {

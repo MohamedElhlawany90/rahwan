@@ -69,8 +69,8 @@ public class OrderService {
         order.setCreationStatus(CreationStatus.CREATED);
 //        order.setStatus(OrderStatus.PENDING);
 
-        String pickupOtp = otpService.generatePickupOtp();
-        order.setOtpForPickup(pickupOtp);
+//        String pickupOtp = otpService.generatePickupOtp();
+//        order.setOtpForPickup(pickupOtp);
 
         // هنا عرفنا uploadDir
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
@@ -95,7 +95,7 @@ public class OrderService {
         }
 
         Order saved = orderRepository.save(order);
-        otpService.sendPickupOtp(user.getPhone(), "Your pickup OTP is: " + pickupOtp);
+//        otpService.sendPickupOtp(user.getPhone(), "Your pickup OTP is: " + pickupOtp);
 
         return enrichCreationDto(orderMapper.toCreationDto(saved));
     }

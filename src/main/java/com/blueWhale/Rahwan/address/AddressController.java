@@ -1,6 +1,10 @@
 package com.blueWhale.Rahwan.address;
 
+import com.blueWhale.Rahwan.security.UserPrincipal;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -8,79 +12,107 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/addresses")
+@RequiredArgsConstructor
 public class AddressController {
 
     private final AddressService addressService;
 
-    public AddressController(AddressService addressService) {
-        this.addressService = addressService;
-    }
-
     /**
-     * Create Address (Pickup)
+     * Create Pickup Address
      */
     @PostMapping("/pickup")
-    public PickupAddressDto createPickup(
-            @RequestBody PickupAddressForm form,
-            @RequestParam UUID userId
+    public ResponseEntity<PickupAddressDto> createPickup(
+            @AuthenticationPrincipal UserPrincipal principal, // 🔐 JWT
+            @Valid @RequestBody PickupAddressForm form
     ) {
-        return addressService.createPickup(form, userId);
+        UUID userId = principal.getId(); // 🔐
+        return ResponseEntity.ok(
+                addressService.createPickup(form, userId)
+        );
     }
 
     /**
-     * Create Address (Dropoff)
+     * Create Dropoff Address
      */
     @PostMapping("/recipient")
-    public DropoffAddressDto createDropoff(
-            @RequestBody DropoffAddressForm form,
-            @RequestParam UUID userId
+    public ResponseEntity<DropoffAddressDto> createDropoff(
+            @AuthenticationPrincipal UserPrincipal principal, // 🔐 JWT
+            @Valid @RequestBody DropoffAddressForm form
     ) {
-        return addressService.createDropoff(form, userId);
-
-
+        UUID userId = principal.getId(); // 🔐
+        return ResponseEntity.ok(
+                addressService.createDropoff(form, userId)
+        );
     }
 
     /**
-     * Update Pickup Location (Map)
+     * Update Pickup Location
      */
     @PutMapping("/{id}/pickup")
-    public PickupAddressDto updatePickup(
+    public ResponseEntity<PickupAddressDto> updatePickup(
             @PathVariable Long id,
             @RequestParam double lat,
             @RequestParam double lng
     ) {
-        return addressService.updatePickupLocation(id, lat, lng);
+        return ResponseEntity.ok(
+                addressService.updatePickupLocation(id, lat, lng)
+        );
     }
 
     /**
-     * Update Recipient Location (Manual Input)
+     * Update Dropoff Location
      */
     @PutMapping("/{id}/recipient")
-    public DropoffAddressDto updateRecipient(
+    public ResponseEntity<DropoffAddressDto> updateRecipient(
             @PathVariable Long id,
             @RequestParam double lat,
             @RequestParam double lng
     ) {
-        return addressService.updateRecipientLocation(id, lat, lng);
+        return ResponseEntity.ok(
+                addressService.updateRecipientLocation(id, lat, lng)
+        );
     }
 
+    /**
+     * Get Address By id
+     */
     @GetMapping("/{id}")
-    public AddressDto get(@PathVariable Long id) {
-        return addressService.getById(id);
+    public ResponseEntity<AddressDto> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(
+                addressService.getById(id)
+        );
     }
 
-    @GetMapping("/pickup/{userId}")
-    public List<PickupAddressDto> getUserPickupAddresses(@PathVariable UUID userId) {
-        return addressService.getUserPickupAddresses(userId);
+    /**
+     * Get User Pickup Addresses
+     */
+    @GetMapping("/pickup")
+    public ResponseEntity<List<PickupAddressDto>> getUserPickupAddresses(
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                addressService.getUserPickupAddresses(principal.getId())
+        );
     }
 
-    @GetMapping("/recipient/{userId}")
-    public List<DropoffAddressDto> getUserRecipientAddresses(@PathVariable UUID userId) {
-        return addressService.getUserDropoffAddresses(userId);
+    /**
+     * Get User Dropoff Addresses
+     */
+    @GetMapping("/recipient")
+    public ResponseEntity<List<DropoffAddressDto>> getUserRecipientAddresses(
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                addressService.getUserDropoffAddresses(principal.getId())
+        );
     }
 
+    /**
+     * Delete Address
+     */
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         addressService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }

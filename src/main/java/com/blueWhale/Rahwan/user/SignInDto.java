@@ -1,6 +1,3 @@
-// ============================================
-// UserDto.java (Updated)
-// ============================================
 package com.blueWhale.Rahwan.user;
 
 import lombok.*;
@@ -12,7 +9,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UserDto {
+public class SignInDto {
 
     private UUID id;
     private String name;
@@ -26,4 +23,6 @@ public class UserDto {
     private double walletBalance;
     private double frozenBalance;
     private double totalBalance;
+
+    private String token ;
 }

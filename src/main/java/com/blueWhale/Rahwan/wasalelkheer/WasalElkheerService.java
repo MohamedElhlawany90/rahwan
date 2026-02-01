@@ -8,9 +8,12 @@ import com.blueWhale.Rahwan.order.CreationDto;
 import com.blueWhale.Rahwan.order.Order;
 import com.blueWhale.Rahwan.order.OrderDto;
 import com.blueWhale.Rahwan.order.OrderStatus;
+import com.blueWhale.Rahwan.otp.OrderOtpService;
+import com.blueWhale.Rahwan.otp.OtpService;
 import com.blueWhale.Rahwan.user.User;
 import com.blueWhale.Rahwan.user.UserRepository;
 import com.blueWhale.Rahwan.util.ImageUtility;
+import com.blueWhale.Rahwan.wallet.Wallet;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +38,8 @@ public class WasalElkheerService {
     private final UserRepository userRepository;
     private final CharityRepository charityRepository;
     private final WhatsAppService whatsAppService;
+    private final OrderOtpService otpService ;
+    private final WasalElkheerMapper orderMapper;
 
     public CreationWasalElkheerDto createWasalElkheer(WasalElkheerForm form, UUID userId) throws IOException {
 
@@ -100,7 +105,137 @@ public class WasalElkheerService {
 
     }
 
-        public List<WasalElkheerDto> getUserOrders(UUID userId) {
+    public WasalElkheerDto driverConfirmOrder(Long orderId, UUID driverId) {
+
+        WasalElkheer order = wasalElkheerRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (order.getStatus() != WasalElkheerStatus.PENDING) {
+            throw new RuntimeException("Order is not in PENDING status");
+        }
+
+        User driver = userRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
+
+        if (!driver.isActive()) {
+            throw new RuntimeException("Driver account is not active");
+        }
+
+
+
+        // توليد OTP للتسليم
+        String deliveryOtp = otpService.generatePickupOtp();
+        order.setOtpForDelivery(deliveryOtp);
+
+        // تحديث الطلب
+        order.setDriverId(driverId);
+        order.setStatus(WasalElkheerStatus.ACCEPTED);
+        order.setConfirmedAt(LocalDateTime.now());
+
+        WasalElkheer updated = wasalElkheerRepository.save(order);
+
+        // إرسال OTP للمستلم
+        otpService.sendDeliveryOtp(order.getRecipientPhone(), deliveryOtp);
+
+        // إرسال تأكيد للـ User
+        User user = userRepository.findById(order.getUserId()).orElse(null);
+        if (user != null) {
+            whatsAppService.sendDriverAcceptedNotification(
+                    user.getPhone(),
+                    driver.getName(),
+                    order.getOtpForPickup()
+            );
+        }
+
+        return enrichDto(orderMapper.toDto(updated));
+    }
+
+    public WasalElkheerDto confirmPickup(Long orderId, String otpFromUser) {
+
+        WasalElkheer order = wasalElkheerRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (order.getStatus() != WasalElkheerStatus.ACCEPTED) {
+            throw new RuntimeException("Order must be in ACCEPTED status");
+        }
+
+        if (!order.getOtpForPickup().equals(otpFromUser)) {
+            throw new RuntimeException("Invalid OTP for pickup");
+        }
+
+        order.setPickupConfirmed(true);
+        order.setStatus(WasalElkheerStatus.IN_PROGRESS);
+        order.setPickedUpAt(LocalDateTime.now());
+
+        WasalElkheer updated = wasalElkheerRepository.save(order);
+        return enrichDto(wasalElkheerMapper.toDto(updated));
+    }
+
+    public WasalElkheerDto updateToInTheWay(Long orderId) {
+
+        WasalElkheer order = wasalElkheerRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (order.getStatus() != WasalElkheerStatus.IN_PROGRESS) {
+            throw new RuntimeException("Order must be in IN_PROGRESS status");
+        }
+
+        order.setStatus(WasalElkheerStatus.IN_THE_WAY);
+
+        WasalElkheer updated = wasalElkheerRepository.save(order);
+        return enrichDto(wasalElkheerMapper.toDto(updated));
+    }
+
+    public WasalElkheerDto confirmDelivery(Long orderId, String otpFromRecipient) {
+
+        WasalElkheer order = wasalElkheerRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (!order.isPickupConfirmed()) {
+            throw new RuntimeException("Pickup must be confirmed first");
+        }
+
+        if (order.getStatus() != WasalElkheerStatus.IN_PROGRESS
+                && order.getStatus() != WasalElkheerStatus.IN_THE_WAY) {
+            throw new RuntimeException("Order must be in progress");
+        }
+
+        if (!order.getOtpForDelivery().equals(otpFromRecipient)) {
+            throw new RuntimeException("Invalid OTP for delivery");
+        }
+
+        order.setDeliveryConfirmed(true);
+        order.setStatus(WasalElkheerStatus.DELIVERED);
+        order.setDeliveredAt(LocalDateTime.now());
+
+        WasalElkheer updated = wasalElkheerRepository.save(order);
+
+        userRepository.findById(order.getUserId())
+                .ifPresent(user ->
+                        whatsAppService.sendDeliveryConfirmation(user.getPhone(), order.getId().toString())
+                );
+
+        return enrichDto(wasalElkheerMapper.toDto(updated));
+    }
+
+    public WasalElkheerDto returnOrder(Long orderId) {
+
+        WasalElkheer order = wasalElkheerRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (!order.isPickupConfirmed()) {
+            throw new RuntimeException("Cannot return order that wasn't picked up");
+        }
+
+        order.setStatus(WasalElkheerStatus.RETURN);
+        order.setDeliveredAt(LocalDateTime.now());
+
+        WasalElkheer updated = wasalElkheerRepository.save(order);
+        return enrichDto(wasalElkheerMapper.toDto(updated));
+    }
+
+
+    public List<WasalElkheerDto> getUserOrders(UUID userId) {
         return wasalElkheerRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
                 .map(wasalElkheerMapper::toDto)

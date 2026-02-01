@@ -27,6 +27,8 @@ public class WasalElkheer {
     @Column(nullable = false)
     private UUID userId;
 
+    private UUID driverId;
+
     @Column(nullable = false)
     private Long charityId;
 
@@ -35,6 +37,9 @@ public class WasalElkheer {
 
     @Column(nullable = false)
     private Double userLongitude;
+
+    @Column(nullable = false)
+    private String recipientPhone;
 
     private String address;
 
@@ -46,6 +51,12 @@ public class WasalElkheer {
 
     @Column(columnDefinition = "TEXT")
     private String additionalNotes;
+
+    // OTP Fields
+    private String otpForPickup;
+    private String otpForDelivery;
+    private boolean pickupConfirmed = false;
+    private boolean deliveryConfirmed = false;
 
     @Column(nullable = false)
     private LocalDate collectionDate;
@@ -74,6 +85,10 @@ public class WasalElkheer {
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
+    private LocalDateTime confirmedAt;
+    private LocalDateTime pickedUpAt;
+    private LocalDateTime deliveredAt;
+
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;

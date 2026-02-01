@@ -120,4 +120,67 @@ public class WasalElkheerController {
                 wasalElkheerService.getAllOrders()
         );
     }
+    /**
+     * Driver confirms order (accepts it)
+     */
+    @PostMapping("/{orderId}/driver-confirm/{driverId}")
+    public ResponseEntity<WasalElkheerDto> driverConfirmOrder(
+            @PathVariable Long orderId,
+            @PathVariable UUID driverId
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.driverConfirmOrder(orderId, driverId)
+        );
+    }
+
+    /**
+     * Confirm Pickup with OTP
+     */
+    @PostMapping("/{orderId}/confirm-pickup")
+    public ResponseEntity<WasalElkheerDto> confirmPickup(
+            @PathVariable Long orderId,
+            @RequestParam String otp
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.confirmPickup(orderId, otp)
+        );
+    }
+
+    /**
+     * Update Order to IN_THE_WAY
+     */
+    @PostMapping("/{orderId}/in-the-way")
+    public ResponseEntity<WasalElkheerDto> updateToInTheWay(
+            @PathVariable Long orderId
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.updateToInTheWay(orderId)
+        );
+    }
+
+    /**
+     * Confirm Delivery with OTP
+     */
+    @PostMapping("/{orderId}/confirm-delivery")
+    public ResponseEntity<WasalElkheerDto> confirmDelivery(
+            @PathVariable Long orderId,
+            @RequestParam String otp
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.confirmDelivery(orderId, otp)
+        );
+    }
+
+    /**
+     * Return Order
+     */
+    @PostMapping("/{orderId}/return")
+    public ResponseEntity<WasalElkheerDto> returnOrder(
+            @PathVariable Long orderId
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.returnOrder(orderId)
+        );
+    }
+
 }

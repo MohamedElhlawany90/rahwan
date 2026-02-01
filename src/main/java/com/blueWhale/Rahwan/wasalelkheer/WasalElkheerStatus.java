@@ -3,9 +3,10 @@ package com.blueWhale.Rahwan.wasalelkheer;
 public enum WasalElkheerStatus {
     PENDING("Pending"),
     ACCEPTED("Accepted"),
-    COLLECTED("Collected"),
-    COMPLETED("Completed"),
-    CANCELLED("Cancelled");
+    IN_PROGRESS("In Progress"),
+    IN_THE_WAY("In The Way"),
+    RETURN("Return"),
+    DELIVERED("Delivered");
 
     private final String displayName;
 
@@ -13,7 +14,4 @@ public enum WasalElkheerStatus {
         this.displayName = displayName;
     }
 
-    public String getDisplayName() {
-        return displayName;
-    }
 }

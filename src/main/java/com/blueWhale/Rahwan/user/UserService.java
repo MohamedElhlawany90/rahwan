@@ -2,6 +2,7 @@ package com.blueWhale.Rahwan.user;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 //import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
+import com.blueWhale.Rahwan.otp.UserOtpService;
 import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
 import com.blueWhale.Rahwan.util.ImageUtility;
 import com.blueWhale.Rahwan.wallet.Wallet;
@@ -18,6 +19,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -31,16 +34,18 @@ public class UserService {
     private final WalletMapper walletMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider ;
+    private final UserOtpService userOtpService;
 
     public UserService(UserRepository userRepository, UserMapper userMapper,
                        WalletService walletService, WalletMapper walletMapper,
-                       PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider) {
+                       PasswordEncoder passwordEncoder, JwtTokenProvider jwtTokenProvider, UserOtpService userOtpService) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.walletService = walletService;
         this.walletMapper = walletMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.userOtpService = userOtpService;
     }
 
     public UserDto createUser(UserForm form) {
@@ -89,6 +94,38 @@ public class UserService {
         return userDto;
     }
 
+    public void requestChangePasswordOtp(UUID userId, String oldPassword) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new RuntimeException("Old password is incorrect");
+        }
+
+        // استخدم OTP system الموجود
+        userOtpService.generateAndSendOtp(user.getPhone());
+    }
+
+
+    public void confirmChangePassword(UUID userId, String otp, String newPassword) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        boolean isValid = userOtpService.validateOtp(user.getPhone(), otp);
+
+        if (!isValid) {
+            throw new RuntimeException("Invalid OTP");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+
+        // clean up
+        user.setOtpPhone(null);
+        userRepository.save(user);
+    }
+
     public List<UserDto> getAllUsers() {
         return userRepository.findAll()
                 .stream()
@@ -102,7 +139,7 @@ public class UserService {
         return userMapper.toDto(user);
     }
 
-    public UserDto updateUser(UUID id, UserForm form) {
+    public UserDto updateUser(UUID id, UpdateUserForm form) {
         validatePhone(form.getPhone());
 
         User user = userRepository.findById(id)
@@ -116,7 +153,6 @@ public class UserService {
 
         user.setName(form.getName());
         user.setPhone(form.getPhone());
-        user.setPassword(passwordEncoder.encode(form.getPassword()));
         user.setType(form.getType());
 
         User updated = userRepository.save(user);

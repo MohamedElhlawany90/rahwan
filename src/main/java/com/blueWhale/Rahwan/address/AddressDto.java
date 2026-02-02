@@ -13,7 +13,10 @@ public class AddressDto {
     private double dropOfflatitude;
     private double dropOfflongitude;
 
-
+    private String governerate ;
+    private String blockNumber ;
+    private String apartmentNumber ;
+    private String streetName ;
 
 
 }

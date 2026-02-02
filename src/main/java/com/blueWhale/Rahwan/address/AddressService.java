@@ -73,6 +73,13 @@ public class AddressService {
                 .map(addressMapper::toDropoffDto)
                 .toList();
     }
+    public List<AddressDto> getAllAddresses(UUID userId) {
+
+        return addressRepository.findByUserId(userId)
+                .stream()
+                .map(addressMapper::toDto)
+                .toList();
+    }
 
     /**
      * Update Pickup Location only (User)

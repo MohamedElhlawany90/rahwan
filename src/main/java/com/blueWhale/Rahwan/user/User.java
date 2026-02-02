@@ -35,6 +35,9 @@ public class User {
     @Column
     private String otpPhone;
 
+    private String passwordResetOtp;
+    private LocalDateTime passwordResetOtpExpiry;
+
     @Column(nullable = false)
     private boolean verifiedPhone = false;
 

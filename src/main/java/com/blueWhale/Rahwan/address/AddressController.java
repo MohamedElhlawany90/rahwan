@@ -83,6 +83,15 @@ public class AddressController {
         );
     }
 
+    @GetMapping
+    public ResponseEntity<List<AddressDto>> getAllAddresses(
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                addressService.getAllAddresses(principal.getId())
+        );
+    }
+
     /**
      * Get User Pickup Addresses
      */

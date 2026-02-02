@@ -282,6 +282,14 @@ public class WasalElkheerService {
                 .collect(Collectors.toList());
     }
 
+    public List<WasalElkheerDto> getAvailableOrders() {
+        return wasalElkheerRepository.findByStatusOrderByCreatedAtDesc(WasalElkheerStatus.PENDING)
+                .stream()
+                .map(wasalElkheerMapper::toDto)
+                .map(this::enrichDto)
+                .collect(Collectors.toList());
+    }
+
     private WasalElkheerDto enrichDto(WasalElkheerDto dto) {
         if (dto.getUserId() != null) {
             userRepository.findById(dto.getUserId()).ifPresent(user ->

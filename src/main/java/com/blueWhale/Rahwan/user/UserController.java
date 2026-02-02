@@ -2,10 +2,13 @@ package com.blueWhale.Rahwan.user;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.otp.UserOtpService;
+import com.blueWhale.Rahwan.security.UserPrincipal;
 import com.blueWhale.Rahwan.wallet.WalletDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,7 +46,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<UserDto> updateUser(@PathVariable UUID id, @Valid @RequestBody UserForm form) {
+    public ResponseEntity<UserDto> updateUser(@PathVariable UUID id, @Valid @RequestBody UpdateUserForm form) {
         return ResponseEntity.ok(userService.updateUser(id, form));
 
     }
@@ -64,6 +67,35 @@ public class UserController {
         return ResponseEntity.ok(userService.updateProfile(id, form));
 
     }
+
+    @PostMapping("/change-password/request-otp")
+    public ResponseEntity<Void> requestChangePasswordOtp(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody ChangePasswordRequest request
+    ) {
+        UUID userId =  principal.getId();
+        userService.requestChangePasswordOtp(
+                userId,
+                request.getOldPassword()
+        );
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/change-password/confirm")
+    public ResponseEntity<Void> confirmChangePassword(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody ConfirmChangePasswordRequest request
+    ) {
+        UUID userId =  principal.getId();
+
+        userService.confirmChangePassword(
+                userId,
+                request.getOtp(),
+                request.getNewPassword()
+        );
+        return ResponseEntity.ok().build();
+    }
+
 
     @GetMapping
     public ResponseEntity<List<UserDto>> getAllUsers() {

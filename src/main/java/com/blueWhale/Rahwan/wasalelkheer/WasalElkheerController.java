@@ -1,5 +1,6 @@
 package com.blueWhale.Rahwan.wasalelkheer;
 
+import com.blueWhale.Rahwan.order.OrderDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -119,6 +120,10 @@ public class WasalElkheerController {
         return ResponseEntity.ok(
                 wasalElkheerService.getAllOrders()
         );
+    }
+    @GetMapping("/available")
+    public ResponseEntity<List<WasalElkheerDto>> getAvailableOrders() {
+        return ResponseEntity.ok(wasalElkheerService.getAvailableOrders());
     }
     /**
      * Driver confirms order (accepts it)

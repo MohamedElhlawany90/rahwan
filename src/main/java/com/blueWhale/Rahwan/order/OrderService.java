@@ -1,6 +1,3 @@
-// ============================================
-// OrderService.java (FIXED)
-// ============================================
 package com.blueWhale.Rahwan.order;
 
 import com.blueWhale.Rahwan.exception.BusinessException;
@@ -9,6 +6,8 @@ import com.blueWhale.Rahwan.notification.WhatsAppService;
 import com.blueWhale.Rahwan.order.service.CostCalculationService;
 import com.blueWhale.Rahwan.order.service.PricingDetails;
 import com.blueWhale.Rahwan.otp.OrderOtpService;
+import com.blueWhale.Rahwan.commission.CommissionSettings;
+import com.blueWhale.Rahwan.commission.CommissionSettingsService;
 import com.blueWhale.Rahwan.user.User;
 import com.blueWhale.Rahwan.user.UserRepository;
 import com.blueWhale.Rahwan.util.ImageUtility;
@@ -40,6 +39,7 @@ public class OrderService {
     private final WalletService walletService;
     private final OrderOtpService otpService;
     private final WhatsAppService whatsAppService;
+    private final CommissionSettingsService commissionSettingsService;
 
     /**
      * 1. إنشاء طلب جديد من User
@@ -61,29 +61,33 @@ public class OrderService {
                 orderForm.getInsuranceValue()
         );
 
+        // جلب نسبة العمولة
+        CommissionSettings commissionSettings = commissionSettingsService.getActiveSettings();
+        double commissionRate = commissionSettings.getCommissionRate();
+
+        // حساب العمولة وأرباح السائق
+        double totalCost = cost.getTotalCost();
+        double appCommission = round((totalCost * commissionRate) / 100.0);
+        double driverEarnings = round(totalCost - appCommission);
+
         Order order = orderMapper.toEntity(orderForm);
         order.setUserId(userId);
-        order.setDeliveryCost(cost.getTotalCost());
+        order.setDeliveryCost(totalCost);
         order.setDistanceKm(cost.getDistanceKm());
+        order.setCommissionRate(commissionRate);
+        order.setAppCommission(appCommission);
+        order.setDriverEarnings(driverEarnings);
         order.setTrackingNumber(generateTrackingNumber());
         order.setCreationStatus(CreationStatus.CREATED);
-//        order.setStatus(OrderStatus.PENDING);
 
-//        String pickupOtp = otpService.generatePickupOtp();
-//        order.setOtpForPickup(pickupOtp);
-
-        // هنا عرفنا uploadDir
+        // رفع الصورة
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
-
-
         if (orderForm.getPhoto() != null) {
-            // لو الفولدر مش موجود نعمله
             if (!Files.exists(uploadDir)) {
                 Files.createDirectories(uploadDir);
             }
             byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
-            Path path = Paths
-                    .get(UPLOADED_FOLDER + new Date().getTime() + "A-A" + orderForm.getPhoto().getOriginalFilename());
+            Path path = Paths.get(UPLOADED_FOLDER + new Date().getTime() + "A-A" + orderForm.getPhoto().getOriginalFilename());
             String url = Files.write(path, bytes).toUri().getPath();
             Set<PosixFilePermission> perms = new HashSet<>();
             perms.add(PosixFilePermission.OWNER_READ);
@@ -95,35 +99,24 @@ public class OrderService {
         }
 
         Order saved = orderRepository.save(order);
-//        otpService.sendPickupOtp(user.getPhone(), "Your pickup OTP is: " + pickupOtp);
 
         return enrichCreationDto(orderMapper.toCreationDto(saved));
     }
 
-
     /**
-     * 2. تأكيد الطلب (تجميد المبلغ + status = PENDING)
+     * 2. تأكيد الطلب (إرسال OTP + status = PENDING)
      */
     public OrderDto confirmOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-        // التحقق من أن الطلب في حالة CREATED
         if (order.getCreationStatus() != CreationStatus.CREATED) {
             throw new RuntimeException("Order must be in CREATED status to confirm");
         }
 
-        // التحقق من الرصيد (لازم يكون ضعف التكلفة)
-        Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
-        double requiredBalance = order.getDeliveryCost() * 2;
-
-        if (userWallet.getWalletBalance() < requiredBalance) {
-            throw new RuntimeException("Insufficient balance. Required: " + requiredBalance +
-                    ", Available: " + userWallet.getWalletBalance());
-        }
-
-        // تجميد ضعف التكلفة
-        walletService.freezeAmount(userWallet, requiredBalance);
+        // توليد OTP للاستلام (السائق هياخدها من User)
+        String pickupOtp = otpService.generatePickupOtp();
+        order.setOtpForPickup(pickupOtp);
 
         // تحديث الحالة
         order.setStatus(OrderStatus.PENDING);
@@ -131,9 +124,11 @@ public class OrderService {
 
         Order updated = orderRepository.save(order);
 
-        // إرسال إشعار التأكيد
+        // إرسال OTP للمستخدم
         User user = userRepository.findById(order.getUserId()).orElse(null);
         if (user != null) {
+            otpService.sendPickupOtp(user.getPhone(), "Your pickup OTP is: " + pickupOtp);
+
             whatsAppService.sendOrderConfirmation(
                     user.getPhone(),
                     order.getTrackingNumber(),
@@ -144,22 +139,23 @@ public class OrderService {
         return enrichDto(orderMapper.toDto(updated));
     }
 
+    /**
+     * 3. تحديث الطلب
+     */
     public CreationDto updateOrder(Long orderId, OrderForm orderForm, UUID userId) throws IOException {
 
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        // تأكد إن الاوردر تابع لنفس اليوزر
         if (!order.getUserId().equals(userId)) {
             throw new BusinessException("You are not allowed to update this order");
         }
 
-        // مينفعش نعدل بعد مراحل معينة
         if (order.getStatus() != null && order.getStatus() != OrderStatus.PENDING) {
             throw new BusinessException("Order cannot be updated in current status");
         }
 
-        // إعادة حساب التكلفة
+        // إعادة حساب التكلفة والعمولة
         PricingDetails cost = costCalculationService.calculateCost(
                 orderForm.getPickupLatitude(),
                 orderForm.getPickupLongitude(),
@@ -168,58 +164,53 @@ public class OrderService {
                 orderForm.getInsuranceValue()
         );
 
-        // تحديث البيانات العادية
+        CommissionSettings commissionSettings = commissionSettingsService.getActiveSettings();
+        double commissionRate = commissionSettings.getCommissionRate();
+        double totalCost = cost.getTotalCost();
+        double appCommission = round((totalCost * commissionRate) / 100.0);
+        double driverEarnings = round(totalCost - appCommission);
+
+        // تحديث البيانات
         order.setPickupLatitude(orderForm.getPickupLatitude());
         order.setPickupLongitude(orderForm.getPickupLongitude());
         order.setPickupAddress(orderForm.getPickupAddress());
-
         order.setRecipientLatitude(orderForm.getRecipientLatitude());
         order.setRecipientLongitude(orderForm.getRecipientLongitude());
         order.setRecipientAddress(orderForm.getRecipientAddress());
         order.setRecipientName(orderForm.getRecipientName());
         order.setRecipientPhone(orderForm.getRecipientPhone());
-
         order.setOrderType(orderForm.getOrderType());
         order.setInsuranceValue(orderForm.getInsuranceValue());
         order.setAdditionalNotes(orderForm.getAdditionalNotes());
-
         order.setCollectionDate(orderForm.getCollectionDate());
         order.setCollectionTime(orderForm.getCollectionTime());
-
         order.setAnyTime(orderForm.getAnyTime());
         order.setAllowInspection(orderForm.getAllowInspection());
         order.setReceiverPaysShipping(orderForm.getReceiverPaysShipping());
 
-        // تحديث التكلفة
-        order.setDeliveryCost(cost.getTotalCost());
+        // تحديث التكلفة والعمولة
+        order.setDeliveryCost(totalCost);
         order.setDistanceKm(cost.getDistanceKm());
+        order.setCommissionRate(commissionRate);
+        order.setAppCommission(appCommission);
+        order.setDriverEarnings(driverEarnings);
 
-        // 📸 تحديث الصورة (لو اتبعتت)
+        // تحديث الصورة
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
-
         if (orderForm.getPhoto() != null && !orderForm.getPhoto().isEmpty()) {
-
             if (!Files.exists(uploadDir)) {
                 Files.createDirectories(uploadDir);
             }
-
             byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
-
-            String fileName = new Date().getTime()
-                    + "A-A"
-                    + orderForm.getPhoto().getOriginalFilename();
-
+            String fileName = new Date().getTime() + "A-A" + orderForm.getPhoto().getOriginalFilename();
             Path path = uploadDir.resolve(fileName);
-
             Files.write(path, bytes);
-
             Set<PosixFilePermission> perms = new HashSet<>();
             perms.add(PosixFilePermission.OWNER_READ);
             perms.add(PosixFilePermission.OWNER_WRITE);
             perms.add(PosixFilePermission.GROUP_READ);
             perms.add(PosixFilePermission.OTHERS_READ);
             Files.setPosixFilePermissions(path, perms);
-
             order.setPhoto(fileName);
         }
 
@@ -227,9 +218,8 @@ public class OrderService {
         return enrichCreationDto(orderMapper.toCreationDto(saved));
     }
 
-
     /**
-     * 3. السائق يقبل الطلب
+     * 4. السائق يقبل الطلب
      */
     public OrderDto driverConfirmOrder(Long orderId, UUID driverId) {
 
@@ -247,17 +237,6 @@ public class OrderService {
             throw new RuntimeException("Driver account is not active");
         }
 
-        // تجميد قيمة المنتج من محفظة السائق
-        Wallet driverWallet = walletService.getWalletByUserId(driverId);
-        double productValue = order.getInsuranceValue();
-
-        if (driverWallet.getWalletBalance() < productValue) {
-            throw new RuntimeException("Driver has insufficient balance for insurance. Required: " +
-                    productValue + ", Available: " + driverWallet.getWalletBalance());
-        }
-
-        walletService.freezeAmount(driverWallet, productValue);
-
         // توليد OTP للتسليم
         String deliveryOtp = otpService.generatePickupOtp();
         order.setOtpForDelivery(deliveryOtp);
@@ -273,20 +252,17 @@ public class OrderService {
         otpService.sendDeliveryOtp(order.getRecipientPhone(), deliveryOtp);
 
         // إرسال تأكيد للـ User
-        User user = userRepository.findById(order.getUserId()).orElse(null);
-        if (user != null) {
-            whatsAppService.sendDriverAcceptedNotification(
-                    user.getPhone(),
-                    driver.getName(),
-                    order.getOtpForPickup()
-            );
-        }
+        userRepository.findById(order.getUserId()).ifPresent(user -> whatsAppService.sendDriverAcceptedNotification(
+                user.getPhone(),
+                driver.getName(),
+                order.getOtpForPickup()
+        ));
 
         return enrichDto(orderMapper.toDto(updated));
     }
 
     /**
-     * 4. السائق يستلم الطلب (يدخل OTP من User)
+     * 5. السائق يستلم الطلب - هنا يحصل التجميد
      */
     public OrderDto confirmPickup(Long orderId, String otpFromUser) {
 
@@ -301,6 +277,30 @@ public class OrderService {
             throw new RuntimeException("Invalid OTP for pickup");
         }
 
+        // ✅ هنا يحصل التجميد بعد ما السائق يستلم
+
+        // 1️⃣ تجميد ضعف التكلفة من User
+        Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
+        double requiredBalance = order.getDeliveryCost() * 2;
+
+        if (userWallet.getWalletBalance() < requiredBalance) {
+            throw new RuntimeException("Insufficient balance. Required: " + requiredBalance +
+                    ", Available: " + userWallet.getWalletBalance());
+        }
+
+        walletService.freezeAmount(userWallet, requiredBalance);
+
+        // 2️⃣ تجميد قيمة التأمين من Driver
+        Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
+        double insuranceValue = order.getInsuranceValue();
+
+        if (driverWallet.getWalletBalance() < insuranceValue) {
+            throw new RuntimeException("Driver has insufficient balance for insurance. Required: " +
+                    insuranceValue + ", Available: " + driverWallet.getWalletBalance());
+        }
+
+        walletService.freezeAmount(driverWallet, insuranceValue);
+
         order.setPickupConfirmed(true);
         order.setStatus(OrderStatus.IN_PROGRESS);
         order.setPickedUpAt(LocalDateTime.now());
@@ -310,7 +310,23 @@ public class OrderService {
     }
 
     /**
-     * 5. السائق يسلم الطلب (يدخل OTP من Recipient)
+     * 6. تحديث للحالة "في الطريق"
+     */
+    public OrderDto updateToInTheWay(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (order.getStatus() != OrderStatus.IN_PROGRESS) {
+            throw new RuntimeException("Order must be in IN_PROGRESS status");
+        }
+
+        order.setStatus(OrderStatus.IN_THE_WAY);
+        Order updated = orderRepository.save(order);
+        return enrichDto(orderMapper.toDto(updated));
+    }
+
+    /**
+     * 7. السائق يسلم الطلب - التحويلات المالية
      */
     public OrderDto confirmDelivery(Long orderId, String otpFromRecipient) {
 
@@ -333,27 +349,48 @@ public class OrderService {
         order.setStatus(OrderStatus.DELIVERED);
         order.setDeliveredAt(LocalDateTime.now());
 
-        // العمليات المالية:
-        double totalFrozen = order.getDeliveryCost() * 2;
+        // ✅ العمليات المالية الصحيحة:
+
         Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
+        Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
+
+        // 1️⃣ فك تجميد ضعف التكلفة من User
+        double totalFrozen = order.getDeliveryCost() * 2;
         walletService.unfreezeAmount(userWallet, totalFrozen);
 
-        walletService.transferFrozenAmount(order.getDriverId(), order.getUserId(), order.getInsuranceValue());
+        // 2️⃣ تحويل التأمين من Driver إلى User
+        //    (السائق استلم الفلوس كاش، فالتأمين يروح للمستخدم)
+        driverWallet.setFrozenBalance(driverWallet.getFrozenBalance() - order.getInsuranceValue());
+        userWallet.setWalletBalance(userWallet.getWalletBalance() + order.getInsuranceValue());
+
+        // 3️⃣ السائق يدفع عمولة التطبيق من محفظته
+        //    (السائق أخذ الدليفري كاش، فيدفع العمولة من محفظته)
+        if (driverWallet.getWalletBalance() < order.getAppCommission()) {
+            throw new RuntimeException("Driver has insufficient balance to pay commission. Required: " +
+                    order.getAppCommission() + ", Available: " + driverWallet.getWalletBalance());
+        }
+
+        driverWallet.setWalletBalance(driverWallet.getWalletBalance() - order.getAppCommission());
+
+        // 4️⃣ حفظ المحافظ
+        walletService.save(userWallet);
+        walletService.save(driverWallet);
+
+        // العمولة (appCommission) دُفعت من السائق وهي أرباح التطبيق
 
         Order updated = orderRepository.save(order);
 
-        // إرسال تأكيد التسليم
         userRepository.findById(order.getUserId())
                 .ifPresent(user -> whatsAppService.sendDeliveryConfirmation(
-                user.getPhone(),
-                order.getTrackingNumber()
-        ));
+                        user.getPhone(),
+                        order.getTrackingNumber()
+                ));
 
         return enrichDto(orderMapper.toDto(updated));
     }
 
     /**
-     * 6. إرجاع الطلب
+     * 8. إرجاع الطلب
      */
     public OrderDto returnOrder(Long orderId) {
 
@@ -367,128 +404,32 @@ public class OrderService {
         order.setStatus(OrderStatus.RETURN);
         order.setDeliveredAt(LocalDateTime.now());
 
-        // فك تجميد المبلغ من User
-        double totalFrozen = order.getDeliveryCost() * 2;
         Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
-        walletService.unfreezeAmount(userWallet, totalFrozen);
-
-        // فك تجميد قيمة المنتج من Driver
         Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
+
+        // فك تجميد المبالغ
+        double totalFrozen = order.getDeliveryCost() * 2;
+        walletService.unfreezeAmount(userWallet, totalFrozen);
         walletService.unfreezeAmount(driverWallet, order.getInsuranceValue());
 
-        // تحويل تكلفة التوصيل من User إلى Driver
+        // السائق يأخذ أجرة الإرجاع كاملة (بدون عمولة)
         userWallet.setWalletBalance(userWallet.getWalletBalance() - order.getDeliveryCost());
-        driverWallet.setWalletBalance(driverWallet.getFrozenBalance() + order.getDeliveryCost());
+        driverWallet.setWalletBalance(driverWallet.getWalletBalance() + order.getDeliveryCost());
 
         Order updated = orderRepository.save(order);
         return enrichDto(orderMapper.toDto(updated));
     }
 
-    /**
-     * 7. تحديث للحالة "في الطريق"
-     */
-    public OrderDto updateToInTheWay(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+    // ... باقي الـ methods (getUserOrders, getDriverOrders, إلخ) بدون تغيير
 
-        if (order.getStatus() != OrderStatus.IN_PROGRESS) {
-            throw new RuntimeException("Order must be in IN_PROGRESS status");
-        }
-
-        order.setStatus(OrderStatus.IN_THE_WAY);
-        Order updated = orderRepository.save(order);
-        return enrichDto(orderMapper.toDto(updated));
+    private double round(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
-    /**
-     * 8. جلب طلبات المستخدم
-     */
-    public List<OrderDto> getUserOrders(UUID userId) {
-        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
-                .stream()
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
+    private String generateTrackingNumber() {
+        return "ORD" + System.currentTimeMillis() + String.format("%04d", new Random().nextInt(10000));
     }
 
-    /**
-     * 9. جلب طلبات السائق
-     */
-    public List<OrderDto> getDriverOrders(UUID driverId) {
-        return orderRepository.findByDriverIdOrderByCreatedAtDesc(driverId)
-                .stream()
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 10. جلب الطلبات المتاحة
-     */
-    public List<OrderDto> getAvailableOrders() {
-        return orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.PENDING)
-                .stream()
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 11. جلب طلبات حسب الحالة والمستخدم
-     */
-    public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
-        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
-                .stream()
-                .filter(order -> order.getStatus() == status)
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 12. جلب طلب بالـ ID
-     */
-        public OrderDto getOrderById(Long orderId) {
-            Order order = orderRepository.findById(orderId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-            return enrichDto(orderMapper.toDto(order));
-        }
-
-    /**
-     * 13. جلب طلب بالـ Tracking Number
-     */
-    public OrderDto getOrderByTrackingNumber(String trackingNumber) {
-        Order order = orderRepository.findByTrackingNumber(trackingNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found with tracking number: " + trackingNumber));
-        return enrichDto(orderMapper.toDto(order));
-    }
-
-    /**
-     * 14. جلب إحصائيات الطلبات
-     */
-    public OrderStatusCounts getOrdersCountsByUser(UUID userId) {
-        List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
-
-        long pending = orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count();
-        long accepted = orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count();
-        long inProgress = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count();
-        long inTheWay = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count();
-        long returned = orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count();
-        long delivered = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
-
-//        long allOrders = orders.stream()
-//                .filter(o -> o.getStatus() != null)
-//                .count();
-
-        long allOrders = orders.size();
-        long allActiveOrders = pending + accepted + inProgress + inTheWay;
-
-        return new OrderStatusCounts(allOrders, allActiveOrders);
-    }
-
-    /**
-     * Helper: إضافة أسماء المستخدمين
-     */
     private OrderDto enrichDto(OrderDto orderDto) {
         if (orderDto.getUserId() != null) {
             userRepository.findById(orderDto.getUserId()).ifPresent(user ->
@@ -502,6 +443,7 @@ public class OrderService {
         }
         return orderDto;
     }
+
     private CreationDto enrichCreationDto(CreationDto creationDto) {
         if (creationDto.getUserId() != null) {
             userRepository.findById(creationDto.getUserId()).ifPresent(user ->
@@ -516,39 +458,82 @@ public class OrderService {
         return creationDto;
     }
 
-    /**
-     * Helper: توليد Tracking Number
-     */
-    private String generateTrackingNumber() {
-        return "ORD" + System.currentTimeMillis() +
-                String.format("%04d", new Random().nextInt(10000));
+    public List<OrderDto> getUserOrders(UUID userId) {
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(orderMapper::toDto)
+                .map(this::enrichDto)
+                .collect(Collectors.toList());
     }
-    public List<OrderDto> getAllOrders(){
+
+    public List<OrderDto> getDriverOrders(UUID driverId) {
+        return orderRepository.findByDriverIdOrderByCreatedAtDesc(driverId)
+                .stream()
+                .map(orderMapper::toDto)
+                .map(this::enrichDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<OrderDto> getAvailableOrders() {
+        return orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.PENDING)
+                .stream()
+                .map(orderMapper::toDto)
+                .map(this::enrichDto)
+                .collect(Collectors.toList());
+    }
+
+    public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .filter(order -> order.getStatus() == status)
+                .map(orderMapper::toDto)
+                .map(this::enrichDto)
+                .collect(Collectors.toList());
+    }
+
+    public OrderDto getOrderById(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        return enrichDto(orderMapper.toDto(order));
+    }
+
+    public OrderDto getOrderByTrackingNumber(String trackingNumber) {
+        Order order = orderRepository.findByTrackingNumber(trackingNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with tracking number: " + trackingNumber));
+        return enrichDto(orderMapper.toDto(order));
+    }
+
+    public OrderStatusCounts getOrdersCountsByUser(UUID userId) {
+        List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        long pending = orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count();
+        long accepted = orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count();
+        long inProgress = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count();
+        long inTheWay = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count();
+        long returned = orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count();
+        long delivered = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
+        long allOrders = orders.size();
+        long allActiveOrders = pending + accepted + inProgress + inTheWay;
+        return new OrderStatusCounts(allOrders, allActiveOrders);
+    }
+
+    public List<OrderDto> getAllOrders() {
         return orderRepository.findAll()
                 .stream()
                 .map(orderMapper::toDto)
                 .map(this::enrichDto)
                 .collect(Collectors.toList());
     }
+
     public OrderStatisticsDto getOrderStatistics(UUID userId) {
-
-        List<Order> orders = orderRepository.findByUserId(userId) ;
-
-        long pending = orders.stream()
-                .filter(order -> order.getStatus()== OrderStatus.PENDING).count();
-        long accepted = orders.stream()
-                .filter(order -> order.getStatus()== OrderStatus.ACCEPTED).count();
-        long inProgress = orders.stream()
-                .filter(order -> order.getStatus()== OrderStatus.IN_PROGRESS).count();
-        long inTheWay = orders.stream()
-                .filter(order -> order.getStatus()== OrderStatus.IN_THE_WAY).count();
-        long returned = orders.stream()
-                .filter(order -> order.getStatus()== OrderStatus.RETURN).count();
-        long delivered = orders.stream()
-                .filter(order -> order.getStatus()== OrderStatus.DELIVERED).count();
+        List<Order> orders = orderRepository.findByUserId(userId);
+        long pending = orders.stream().filter(order -> order.getStatus() == OrderStatus.PENDING).count();
+        long accepted = orders.stream().filter(order -> order.getStatus() == OrderStatus.ACCEPTED).count();
+        long inProgress = orders.stream().filter(order -> order.getStatus() == OrderStatus.IN_PROGRESS).count();
+        long inTheWay = orders.stream().filter(order -> order.getStatus() == OrderStatus.IN_THE_WAY).count();
+        long returned = orders.stream().filter(order -> order.getStatus() == OrderStatus.RETURN).count();
+        long delivered = orders.stream().filter(order -> order.getStatus() == OrderStatus.DELIVERED).count();
 
         OrderStatisticsDto statisticsDto = new OrderStatisticsDto();
-
         statisticsDto.setTotalOrders(orders.size());
         statisticsDto.setPending(pending);
         statisticsDto.setAccepted(accepted);
@@ -556,20 +541,14 @@ public class OrderService {
         statisticsDto.setInTheWay(inTheWay);
         statisticsDto.setInDelivery(returned);
         statisticsDto.setDelivered(delivered);
-
         return statisticsDto;
     }
-    public OrderDto changeOrderStatus(Long orderId, OrderStatus status) {
 
+    public OrderDto changeOrderStatus(Long orderId, OrderStatus status) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-
-        // تغيير الحالة يدوي
         order.setStatus(status);
-
         Order savedOrder = orderRepository.save(order);
-
         return orderMapper.toDto(savedOrder);
     }
-
 }

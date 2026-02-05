@@ -1,23 +1,24 @@
 package com.blueWhale.Rahwan.order.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import com.blueWhale.Rahwan.pricing.PricingSettings;
+import com.blueWhale.Rahwan.pricing.PricingSettingsService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class CostCalculationService {
 
-    private static final double     BASE_COST = 20.0;
-    private static final double COST_PER_KM = 2.5;
-//    private static final double INSURANCE_RATE = 0.01; // 1%
-    private static final double ROAD_MULTIPLIER = 1.2;
-
-    @Autowired
-    private DistanceService distanceService;
+    private final DistanceService distanceService;
+    private final PricingSettingsService pricingSettingsService;
 
     public PricingDetails calculateCost(
             double pickupLat, double pickupLng,
             double recipientLat, double recipientLng,
             Double insuranceValue) {
+
+        // جلب الإعدادات النشطة
+        PricingSettings settings = pricingSettingsService.getActiveSettings();
 
         // 1️⃣ حساب المسافة
         double rawDistance = distanceService.calculateDistance(
@@ -26,31 +27,25 @@ public class CostCalculationService {
         );
 
         double adjustedDistance = round(
-                rawDistance * ROAD_MULTIPLIER
+                rawDistance * settings.getRoadMultiplier()
         );
 
         // 2️⃣ تكلفة المسافة
         double distanceCost = round(
-                adjustedDistance * COST_PER_KM
+                adjustedDistance * settings.getCostPerKm()
         );
-//
-//        // 3️⃣ تكلفة التأمين
-//        double insuranceCost =
-//                insuranceValue != null && insuranceValue > 0
-//                        ? round(insuranceValue * INSURANCE_RATE)
-//                        : 0.0;
 
-        // 4️⃣ الإجمالي
+        // 3️⃣ الإجمالي
         double totalCost = round(
-                BASE_COST + distanceCost
-//                        + insuranceCost
+                settings.getBaseCost() + distanceCost
         );
 
-        // 5️⃣ Breakdown
+        // 4️⃣ Breakdown
         return PricingDetails.builder()
-                .baseCost(BASE_COST)
+                .baseCost(settings.getBaseCost())
+                .costPerKm(settings.getCostPerKm())
+                .roadMultiplier(settings.getRoadMultiplier())
                 .distanceCost(distanceCost)
-//                .insuranceCost(insuranceCost)
                 .totalCost(totalCost)
                 .distanceKm(adjustedDistance)
                 .distanceDisplay(adjustedDistance + " km")
@@ -59,7 +54,6 @@ public class CostCalculationService {
 
     // 🔧 تقريب رقمين عشريين
     private double round(double value) {
-
         return Math.round(value * 100.0) / 100.0;
     }
 }

@@ -1,7 +1,7 @@
 package com.blueWhale.Rahwan.order;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -12,23 +12,23 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class OrderDto {
+
     private Long id;
     private UUID userId;
-    private UUID driverId;
     private String userName;
+    private UUID driverId;
     private String driverName;
+    private String photo;
 
-    // Pickup Location
+    // Locations
     private double pickupLatitude;
     private double pickupLongitude;
     private String pickupAddress;
-
-    // Recipient Location
     private double recipientLatitude;
     private double recipientLongitude;
     private String recipientAddress;
 
-    // Recipient Details
+    // Recipient
     private String recipientName;
     private String recipientPhone;
 
@@ -36,29 +36,31 @@ public class OrderDto {
     private OrderType orderType;
     private double insuranceValue;
     private double deliveryCost;
-    private String photo;
+
+    // Commission Details
+    private double commissionRate;
+    private double appCommission;
+    private double driverEarnings;
+
     private String additionalNotes;
+    private String rejectionReason;
 
     // Collection Time
     private LocalDate collectionDate;
-
-    @JsonFormat(pattern = "HH:mm")
     private LocalTime collectionTime;
-
     private Boolean anyTime;
-
-    private String rejectionReason;
-
-    // Options
     private Boolean allowInspection;
     private Boolean receiverPaysShipping;
 
     // Status
-    private OrderStatus status ;
+    private OrderStatus status;
+    private CreationStatus creationStatus;
     private String trackingNumber;
     private double distanceKm;
 
-    // OTP Status (don't expose actual OTPs)
+    // OTP
+    private String otpForPickup;
+    private String otpForDelivery;
     private boolean pickupConfirmed;
     private boolean deliveryConfirmed;
 

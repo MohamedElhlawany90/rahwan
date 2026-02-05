@@ -23,7 +23,7 @@ public class Order {
 
     private UUID driverId;
 
-    private String photo ;
+    private String photo;
 
     // Pickup Location
     private double pickupLatitude;
@@ -51,6 +51,16 @@ public class Order {
     @Column(nullable = false)
     private double deliveryCost;
 
+    // Commission Fields
+    @Column(nullable = false)
+    private double commissionRate = 10.0; // نسبة العمولة %
+
+    @Column(nullable = false)
+    private double appCommission = 0.0; // عمولة التطبيق
+
+    @Column(nullable = false)
+    private double driverEarnings = 0.0; // أرباح السائق
+
     @Column(length = 500)
     private String additionalNotes;
 
@@ -70,13 +80,12 @@ public class Order {
 
     // Status & Tracking
     @Enumerated(EnumType.STRING)
-//    @Column(nullable = false)
-    private OrderStatus status ;
+    private OrderStatus status;
 
     // creation status
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private CreationStatus creationStatus ;
+    private CreationStatus creationStatus;
 
     @Column(unique = true)
     private String trackingNumber;
@@ -100,8 +109,5 @@ public class Order {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-////        if (status == null) {
-////            status = OrderStatus.PENDING;
-////        }
-  }
+    }
 }

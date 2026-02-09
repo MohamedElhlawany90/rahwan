@@ -119,12 +119,13 @@ public class OrderController {
     /**
      * 7. جلب طلبات المستخدم
      */
-    @GetMapping("/user")
+    @GetMapping("/user/{userId}")
     public ResponseEntity<List<OrderDto>> getUserOrders(
-            @AuthenticationPrincipal UserPrincipal principal // 🔐
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID userId
     ) {
         return ResponseEntity.ok(
-                orderService.getUserOrders(principal.getId())
+                orderService.getUserOrders(userId)
         );
     }
 

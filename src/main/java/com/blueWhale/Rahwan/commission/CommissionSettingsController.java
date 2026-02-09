@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Year;
 import java.util.List;
 
 @RestController
@@ -58,5 +59,17 @@ public class CommissionSettingsController {
     public ResponseEntity<CommissionSettingsDto> activateSettings(@PathVariable Long id) {
         CommissionSettingsDto activated = settingsService.activateSettings(id);
         return ResponseEntity.ok(activated);
+    }
+
+    /**
+     * جلب الإيرادات الشهرية (Admin فقط)
+     */
+    @GetMapping("/monthly-revenue")
+    public ResponseEntity<List<MonthlyRevenueDto>> getMonthlyRevenue(
+            @RequestParam(required = false) Integer year
+    ) {
+        int targetYear = (year != null) ? year : Year.now().getValue();
+        List<MonthlyRevenueDto> revenue = settingsService.getMonthlyRevenue(targetYear);
+        return ResponseEntity.ok(revenue);
     }
 }

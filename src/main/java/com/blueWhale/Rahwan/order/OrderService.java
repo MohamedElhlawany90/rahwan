@@ -147,7 +147,12 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if (!order.getUserId().equals(userId)) {
+        // جلب المستخدم للتحقق من نوعه
+        User currentUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // السماح بالتعديل إذا كان المستخدم هو صاحب الطلب أو أدمن
+        if (!order.getUserId().equals(userId) && !currentUser.getType().equals("admin")) {
             throw new BusinessException("You are not allowed to update this order");
         }
 

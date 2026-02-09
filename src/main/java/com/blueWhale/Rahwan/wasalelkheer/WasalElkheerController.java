@@ -1,11 +1,12 @@
 package com.blueWhale.Rahwan.wasalelkheer;
 
-import com.blueWhale.Rahwan.order.OrderDto;
+import com.blueWhale.Rahwan.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -20,19 +21,19 @@ public class WasalElkheerController {
     private final WasalElkheerService wasalElkheerService;
 
     /**
-     * Create Wasal El-Kheer Order
+     * 1. User: إنشاء طلب جديد
      */
     @PostMapping(
-            value = "/create/{userId}",
+            value = "/create",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
     public ResponseEntity<CreationWasalElkheerDto> createOrder(
-            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal, // 🔐 JWT
             @Valid @ModelAttribute WasalElkheerForm form
     ) throws IOException {
 
         CreationWasalElkheerDto created =
-                wasalElkheerService.createWasalElkheer(form, userId);
+                wasalElkheerService.createWasalElkheer(form, principal.getId());
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -40,7 +41,7 @@ public class WasalElkheerController {
     }
 
     /**
-     * Confirm Order
+     * 2. User: تأكيد الطلب
      */
     @PostMapping("/{id}/confirm")
     public ResponseEntity<WasalElkheerDto> confirmOrder(
@@ -52,94 +53,38 @@ public class WasalElkheerController {
     }
 
     /**
-     * Get User Orders
+     * 3. Driver: قبول الطلب
      */
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<WasalElkheerDto>> getUserOrders(
-            @PathVariable UUID userId
-    ) {
-        return ResponseEntity.ok(
-                wasalElkheerService.getUserOrders(userId)
-        );
-    }
-
-    /**
-     * Get Charity Orders
-     */
-    @GetMapping("/charity/{charityId}")
-    public ResponseEntity<List<WasalElkheerDto>> getCharityOrders(
-            @PathVariable Long charityId
-    ) {
-        return ResponseEntity.ok(
-                wasalElkheerService.getCharityOrders(charityId)
-        );
-    }
-
-    /**
-     * Get Orders By Status
-     */
-    @GetMapping("/status/{status}")
-    public ResponseEntity<List<WasalElkheerDto>> getOrdersByStatus(
-            @PathVariable WasalElkheerStatus status
-    ) {
-        return ResponseEntity.ok(
-                wasalElkheerService.getOrdersByStatus(status)
-        );
-    }
-
-    /**
-     * Get Order By id
-     */
-    @GetMapping("/{orderId}")
-    public ResponseEntity<WasalElkheerDto> getOrderById(
-            @PathVariable Long orderId
-    ) {
-        return ResponseEntity.ok(
-                wasalElkheerService.getOrderById(orderId)
-        );
-    }
-
-    /**
-     * Update Order Status
-     */
-    @PatchMapping("/{orderId}/status")
-    public ResponseEntity<WasalElkheerDto> updateOrderStatus(
-            @PathVariable Long orderId,
-            @RequestParam WasalElkheerStatus status
-    ) {
-        return ResponseEntity.ok(
-                wasalElkheerService.updateOrderStatus(orderId, status)
-        );
-    }
-
-    /**
-     * Get All Orders (Admin)
-     */
-    @GetMapping
-    public ResponseEntity<List<WasalElkheerDto>> getAllOrders() {
-        return ResponseEntity.ok(
-                wasalElkheerService.getAllOrders()
-        );
-    }
-    @GetMapping("/available")
-    public ResponseEntity<List<WasalElkheerDto>> getAvailableOrders() {
-        return ResponseEntity.ok(wasalElkheerService.getAvailableOrders());
-    }
-    /**
-     * Driver confirms order (accepts it)
-     */
-    @PostMapping("/{orderId}/driver-confirm/{driverId}")
+    @PostMapping("/{orderId}/confirm-by-driver")
     public ResponseEntity<WasalElkheerDto> driverConfirmOrder(
             @PathVariable Long orderId,
-            @PathVariable UUID driverId
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
     ) {
         return ResponseEntity.ok(
-                wasalElkheerService.driverConfirmOrder(orderId, driverId)
+                wasalElkheerService.driverConfirmOrder(orderId, principal.getId())
         );
     }
 
     /**
-     * Confirm Pickup with OTP
+     * 4. User: تعديل الطلب
+     */
+    @PutMapping(
+            value = "/update/{orderId}",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<CreationWasalElkheerDto> updateOrder(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal, // 🔐
+            @ModelAttribute WasalElkheerForm form
+    ) throws IOException {
+
+        return ResponseEntity.ok(
+                wasalElkheerService.updateOrder(orderId, form, principal.getId())
+        );
+    }
+
+    /**
+     * 5. Driver: تأكيد الاستلام OTP
      */
     @PostMapping("/{orderId}/confirm-pickup")
     public ResponseEntity<WasalElkheerDto> confirmPickup(
@@ -152,9 +97,9 @@ public class WasalElkheerController {
     }
 
     /**
-     * Update Order to IN_THE_WAY
+     * 6. Driver: تحديث الطلب "في الطريق"
      */
-    @PostMapping("/{orderId}/in-the-way")
+    @PatchMapping("/{orderId}/in-the-way")
     public ResponseEntity<WasalElkheerDto> updateToInTheWay(
             @PathVariable Long orderId
     ) {
@@ -164,7 +109,7 @@ public class WasalElkheerController {
     }
 
     /**
-     * Confirm Delivery with OTP
+     * 7. Driver: تأكيد التسليم OTP
      */
     @PostMapping("/{orderId}/confirm-delivery")
     public ResponseEntity<WasalElkheerDto> confirmDelivery(
@@ -177,7 +122,7 @@ public class WasalElkheerController {
     }
 
     /**
-     * Return Order
+     * 8. Driver: إرجاع الطلب
      */
     @PostMapping("/{orderId}/return")
     public ResponseEntity<WasalElkheerDto> returnOrder(
@@ -188,4 +133,85 @@ public class WasalElkheerController {
         );
     }
 
+    /**
+     * 9. User: جلب طلبات المستخدم
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<WasalElkheerDto>> getUserOrders(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID userId
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.getUserOrders(userId)
+        );
+    }
+
+    /**
+     * 10. Charity: جلب طلبات الجمعية
+     */
+    @GetMapping("/charity/{charityId}")
+    public ResponseEntity<List<WasalElkheerDto>> getCharityOrders(
+            @PathVariable Long charityId
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.getCharityOrders(charityId)
+        );
+    }
+
+    /**
+     * 11. جلب الطلبات المتاحة للسائق
+     */
+    @GetMapping("/available")
+    public ResponseEntity<List<WasalElkheerDto>> getAvailableOrders() {
+        return ResponseEntity.ok(
+                wasalElkheerService.getAvailableOrders()
+        );
+    }
+
+    /**
+     * 12. جلب الطلبات حسب الحالة
+     */
+    @GetMapping("/status/{status}")
+    public ResponseEntity<List<WasalElkheerDto>> getOrdersByStatus(
+            @PathVariable WasalElkheerStatus status
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.getOrdersByStatus(status)
+        );
+    }
+
+    /**
+     * 13. جلب تفاصيل طلب
+     */
+    @GetMapping("/{orderId}")
+    public ResponseEntity<WasalElkheerDto> getOrderById(
+            @PathVariable Long orderId
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.getOrderById(orderId)
+        );
+    }
+
+    /**
+     * 14. Admin: جلب كل الطلبات
+     */
+    @GetMapping
+    public ResponseEntity<List<WasalElkheerDto>> getAllOrders() {
+        return ResponseEntity.ok(
+                wasalElkheerService.getAllOrders()
+        );
+    }
+
+    /**
+     * 15. Admin: تغيير حالة الطلب
+     */
+    @PatchMapping("/{orderId}/status")
+    public ResponseEntity<WasalElkheerDto> updateOrderStatus(
+            @PathVariable Long orderId,
+            @RequestParam WasalElkheerStatus status
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.updateOrderStatus(orderId, status)
+        );
+    }
 }

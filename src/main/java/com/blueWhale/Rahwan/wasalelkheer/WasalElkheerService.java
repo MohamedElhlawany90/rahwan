@@ -2,6 +2,7 @@ package com.blueWhale.Rahwan.wasalelkheer;
 
 import com.blueWhale.Rahwan.charity.Charity;
 import com.blueWhale.Rahwan.charity.CharityRepository;
+import com.blueWhale.Rahwan.exception.BusinessException;
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.notification.WhatsAppService;
 import com.blueWhale.Rahwan.order.CreationDto;
@@ -104,6 +105,78 @@ public class WasalElkheerService {
         return enrichDto(wasalElkheerMapper.toDto(updated));
 
     }
+    public CreationWasalElkheerDto updateOrder(Long orderId, WasalElkheerForm form, UUID userId) throws IOException {
+
+        WasalElkheer order = wasalElkheerRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+
+        // جلب المستخدم للتحقق من نوعه
+        User currentUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // السماح بالتعديل إذا كان المستخدم هو صاحب الطلب أو أدمن
+        if (!order.getUserId().equals(userId) && !currentUser.getType().equals("admin")) {
+            throw new BusinessException("You are not allowed to update this order");
+        }
+
+        // الأوردر مينفعش يتعدل لو اتحرك خلاص
+        if (order.getStatus() != null &&
+                (order.getStatus() == WasalElkheerStatus.ACCEPTED
+                        || order.getStatus() == WasalElkheerStatus.IN_PROGRESS
+                        || order.getStatus() == WasalElkheerStatus.IN_THE_WAY
+                        || order.getStatus() == WasalElkheerStatus.DELIVERED
+                        || order.getStatus() == WasalElkheerStatus.RETURN)) {
+            throw new RuntimeException("Order cannot be updated in current status");
+        }
+
+        // التحقق من الجمعية
+        Charity charity = charityRepository.findById(form.getCharityId())
+                .orElseThrow(() -> new ResourceNotFoundException("Charity not found with id: " + form.getCharityId()));
+
+        if (!charity.isActive()) {
+            throw new RuntimeException("Charity is not active");
+        }
+
+        // تحديث البيانات الأساسية
+        order.setCharityId(form.getCharityId());
+        order.setAddress(form.getAddress());
+        order.setAdditionalNotes(form.getAdditionalNotes());
+        order.setAdditionalNotes(form.getAdditionalNotes());
+
+
+        // تحديث الصورة لو موجودة
+        Path uploadDir = Paths.get(UPLOADED_FOLDER);
+
+        if (form.getPhoto() != null && !form.getPhoto().isEmpty()) {
+
+            if (!Files.exists(uploadDir)) {
+                Files.createDirectories(uploadDir);
+            }
+
+            byte[] bytes = ImageUtility.compressImage(form.getPhoto().getBytes());
+
+            String fileName = new Date().getTime() + "A-A" + form.getPhoto().getOriginalFilename();
+            Path path = uploadDir.resolve(fileName);
+
+            Files.write(path, bytes);
+
+            Set<PosixFilePermission> perms = new HashSet<>();
+            perms.add(PosixFilePermission.OWNER_READ);
+            perms.add(PosixFilePermission.OWNER_WRITE);
+            perms.add(PosixFilePermission.GROUP_READ);
+            perms.add(PosixFilePermission.OTHERS_READ);
+
+            Files.setPosixFilePermissions(path, perms);
+
+            order.setPhoto(fileName);
+        }
+
+        WasalElkheer saved = wasalElkheerRepository.save(order);
+
+        return enrichCreationDto(wasalElkheerMapper.toCreationWasalDto(saved));
+    }
+
 
     public WasalElkheerDto driverConfirmOrder(Long orderId, UUID driverId) {
 
@@ -134,8 +207,8 @@ public class WasalElkheerService {
 
         WasalElkheer updated = wasalElkheerRepository.save(order);
 
-        // إرسال OTP للمستلم
-        otpService.sendDeliveryOtp(order.getRecipientPhone(), deliveryOtp);
+//        // إرسال OTP للمستلم
+//        otpService.sendDeliveryOtp(order.getRecipientPhone(), deliveryOtp);
 
         // إرسال تأكيد للـ User
         User user = userRepository.findById(order.getUserId()).orElse(null);

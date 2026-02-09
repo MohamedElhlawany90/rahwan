@@ -38,8 +38,8 @@ public class WasalElkheer {
     @Column(nullable = false)
     private Double userLongitude;
 
-    @Column(nullable = false)
-    private String recipientPhone;
+//    @Column(nullable = false)
+//    private String recipientPhone;
 
     private String address;
 

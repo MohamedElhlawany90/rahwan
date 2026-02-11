@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -98,10 +99,7 @@ public class WasalElkheerService {
 
         WasalElkheer updated = wasalElkheerRepository.save(order);
 
-        User user = userRepository.findById(order.getUserId()).orElse(null);
-        if (user != null) {
-            whatsAppService.sendOrderConfirmation(user.getPhone());
-        }
+        userRepository.findById(order.getUserId()).ifPresent(user -> whatsAppService.sendOrderConfirmation(user.getPhone()));
         return enrichDto(wasalElkheerMapper.toDto(updated));
 
     }
@@ -139,10 +137,18 @@ public class WasalElkheerService {
         }
 
         // تحديث البيانات الأساسية
+        order.setUserLatitude(form.getUserLatitude());
+        order.setUserLongitude(form.getUserLongitude());
         order.setCharityId(form.getCharityId());
         order.setAddress(form.getAddress());
         order.setAdditionalNotes(form.getAdditionalNotes());
-        order.setAdditionalNotes(form.getAdditionalNotes());
+        order.setOrderType(form.getOrderType());
+        order.setCollectionDate(form.getCollectionDate());
+        order.setCollectionTime(LocalTime.parse(form.getCollectionTime()));
+        order.setAnyTime(form.isAnyTime());
+        order.setAllowInspection(form.isAllowInspection());
+        order.setShippingPaidByReceiver(form.isShippingPaidByReceiver());
+
 
 
         // تحديث الصورة لو موجودة

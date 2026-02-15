@@ -1,7 +1,6 @@
 package com.blueWhale.Rahwan.user;
 
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
-//import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
 import com.blueWhale.Rahwan.otp.UserOtpService;
 import com.blueWhale.Rahwan.security.jwt.JwtTokenProvider;
 import com.blueWhale.Rahwan.util.ImageUtility;
@@ -9,7 +8,6 @@ import com.blueWhale.Rahwan.wallet.Wallet;
 import com.blueWhale.Rahwan.wallet.WalletDto;
 import com.blueWhale.Rahwan.wallet.WalletMapper;
 import com.blueWhale.Rahwan.wallet.WalletService;
-import io.jsonwebtoken.Jwt;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +17,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -33,7 +30,7 @@ public class UserService {
     private final WalletService walletService;
     private final WalletMapper walletMapper;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider ;
+    private final JwtTokenProvider jwtTokenProvider;
     private final UserOtpService userOtpService;
 
     public UserService(UserRepository userRepository, UserMapper userMapper,
@@ -62,7 +59,6 @@ public class UserService {
         User saved = userRepository.save(user);
 
         walletService.createWalletForUser(saved);
-        
 
         return userMapper.toDto(saved);
     }
@@ -85,8 +81,10 @@ public class UserService {
             user.setActive(true);
             userRepository.save(user);
         }
+
+        // استخدام UserRole في token generation
         String token = jwtTokenProvider
-                .generateToken(user.getId(),user.getPhone(),user.getType());
+                .generateToken(user.getId(), user.getPhone(), user.getRole().name());
 
         SignInDto userDto = userMapper.toSignInDto(user);
         userDto.setToken(token);
@@ -103,10 +101,8 @@ public class UserService {
             throw new RuntimeException("Old password is incorrect");
         }
 
-        // استخدم OTP system الموجود
         userOtpService.generateAndSendOtp(user.getPhone());
     }
-
 
     public void confirmChangePassword(UUID userId, String otp, String newPassword) {
 
@@ -139,6 +135,9 @@ public class UserService {
         return userMapper.toDto(user);
     }
 
+    /**
+     * Update user - تحديث بيانات المستخدم (Admin only)
+     */
     public UserDto updateUser(UUID id, UpdateUserForm form) {
         validatePhone(form.getPhone());
 
@@ -153,7 +152,7 @@ public class UserService {
 
         user.setName(form.getName());
         user.setPhone(form.getPhone());
-        user.setType(form.getType());
+        user.setRole(form.getRole()); // استخدام UserRole بدلاً من type
 
         User updated = userRepository.save(user);
         return userMapper.toDto(updated);
@@ -175,7 +174,6 @@ public class UserService {
         user.setName(form.getName());
         user.setPhone(form.getPhone());
 
-        // هنا عرفنا uploadDir
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
 
         if (form.getProfileImage() != null && !form.getProfileImage().isEmpty()) {
@@ -247,7 +245,6 @@ public class UserService {
             throw new RuntimeException("Cannot update balance for inactive user");
         }
 
-        // استخدام الـ method الجديدة من WalletService
         return walletService.addBalance(userId, addedBalance);
     }
 

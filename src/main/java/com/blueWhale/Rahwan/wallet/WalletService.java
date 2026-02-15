@@ -52,6 +52,32 @@ public class WalletService {
         return walletMapper.toDto(updated);
     }
 
+    public void transferBalance(UUID fromUserId, UUID toUserId, double amount) {
+        Wallet fromWallet = getWalletByUserId(fromUserId);
+        Wallet toWallet = getWalletByUserId(toUserId);
+
+        if (fromWallet.getWalletBalance() < amount) {
+            throw new RuntimeException("Insufficient balance. Available: " +
+                    fromWallet.getWalletBalance() + ", Required: " + amount);
+        }
+
+        fromWallet.setWalletBalance(fromWallet.getWalletBalance() - amount);
+        toWallet.setWalletBalance(toWallet.getWalletBalance() + amount);
+
+        walletRepository.save(fromWallet);
+        walletRepository.save(toWallet);
+    }
+
+    public void checkHasEnoughBalance(UUID userId, double amount) {
+        Wallet wallet = getWalletByUserId(userId);
+        if (wallet.getWalletBalance() < amount) {
+            throw new RuntimeException("Insufficient balance. Available: " +
+                    wallet.getWalletBalance() + ", Required: " + amount);
+        }
+    }
+
+
+
     public void freezeAmount(Wallet wallet, double amount) {
         if (wallet.getWalletBalance() < amount) {
             throw new RuntimeException("Insufficient balance. Available: " +

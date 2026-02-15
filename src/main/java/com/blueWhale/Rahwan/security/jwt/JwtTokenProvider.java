@@ -3,7 +3,6 @@ package com.blueWhale.Rahwan.security.jwt;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
@@ -23,14 +22,20 @@ public class JwtTokenProvider {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 
-    public String generateToken(UUID userId, String phone, String type) {
+    /**
+     * Generate JWT token with role
+     * @param userId User ID
+     * @param phone User phone
+     * @param role User role (USER, DRIVER, ADMIN)
+     */
+    public String generateToken(UUID userId, String phone, String role) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
 
         return Jwts.builder()
                 .setSubject(userId.toString())
                 .claim("phone", phone)
-                .claim("type", type)
+                .claim("role", role) // ✅ استخدام role بدل type
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(getSigningKey(), SignatureAlgorithm.HS512)
@@ -57,14 +62,26 @@ public class JwtTokenProvider {
         return claims.get("phone", String.class);
     }
 
-    public String getTypeFromToken(String token) {
+    /**
+     * Get role from token
+     */
+    public String getRoleFromToken(String token) {
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
 
-        return claims.get("type", String.class);
+        return claims.get("role", String.class);
+    }
+
+    /**
+     * @deprecated Use getRoleFromToken() instead
+     */
+    @Deprecated
+    public String getTypeFromToken(String token) {
+        // للتوافق مع الكود القديم
+        return getRoleFromToken(token);
     }
 
     public boolean validateToken(String token) {

@@ -54,7 +54,7 @@ public class OrderDto {
 
     // Status
     private OrderStatus status;
-    private CreationStatus creationStatus;
+//    private CreationStatus creationStatus;
     private String trackingNumber;
     private double distanceKm;
 

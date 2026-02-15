@@ -2,6 +2,7 @@
 package com.blueWhale.Rahwan.user;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
@@ -23,7 +24,11 @@ public class UserForm {
     @Size(min = 6, message = "Password must be at least 6 characters")
     private String password;
 
-    @NotBlank(message = "Type is required (user or driver or admin)")
-    @Pattern(regexp = "^(user|driver|admin)$", message = "Type must be 'user' or 'driver'")
-    private String type;
+    /**
+     * Role: USER, DRIVER, or ADMIN
+     * Default: USER
+     */
+    @NotNull(message = "Role is required")
+    @Builder.Default
+    private UserRole role = UserRole.USER;
 }

@@ -1,21 +1,14 @@
 package com.blueWhale.Rahwan;
 
-//import com.blueWhale.Rahwan.otp.TwilioProperties;
-import io.swagger.v3.oas.annotations.OpenAPIDefinition;
-import io.swagger.v3.oas.annotations.servers.Server;
+
+import com.blueWhale.Rahwan.mapconfig.GoogleMapsProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.reactive.CorsWebFilter;
-import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
-import java.util.List;
 
 @SpringBootApplication
-//@EnableConfigurationProperties(TwilioProperties.class)
-
+@EnableConfigurationProperties(GoogleMapsProperties.class)
 public class RahwanApplication {
 
 	public static void main(String[] args) {

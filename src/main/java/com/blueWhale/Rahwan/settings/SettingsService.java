@@ -17,7 +17,7 @@ public class SettingsService {
     private void checkAdmin(Authentication authentication) {
         UserPrincipal user = (UserPrincipal) authentication.getPrincipal();
 
-        if (!"admin".equals(user.getType())) {
+        if (!"admin".equalsIgnoreCase(user.getRole().name())) {
             throw new RuntimeException("Access denied");
         }
     }

@@ -17,7 +17,7 @@ public class UserDto {
     private UUID id;
     private String name;
     private String phone;
-    private String type;
+    private UserRole role;
     private String profileImage;
     private boolean active;
     private boolean verifiedPhone;
@@ -26,4 +26,13 @@ public class UserDto {
     private double walletBalance;
     private double frozenBalance;
     private double totalBalance;
+
+    // Helper methods for UI/Frontend
+    public String getRoleDisplayNameEn() {
+        return role != null ? role.getDisplayNameEn() : null;
+    }
+
+    public String getRoleDisplayNameAr() {
+        return role != null ? role.getDisplayNameAr() : null;
+    }
 }

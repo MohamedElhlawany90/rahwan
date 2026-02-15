@@ -44,9 +44,25 @@ public class User {
     @Column(nullable = false)
     private boolean active = true;
 
-    // user or driver
+    /**
+     * User Role: USER, DRIVER, or ADMIN
+     */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String type = "user";
+    private UserRole role = UserRole.USER;
 
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    // Helper methods for role checking
+    public boolean isUser() {
+        return this.role == UserRole.USER;
+    }
+
+    public boolean isDriver() {
+        return this.role == UserRole.DRIVER;
+    }
+
+    public boolean isAdmin() {
+        return this.role == UserRole.ADMIN;
+    }
 }

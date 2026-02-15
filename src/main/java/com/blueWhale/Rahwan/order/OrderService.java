@@ -425,6 +425,123 @@ public class OrderService {
         return enrichDto(orderMapper.toDto(updated));
     }
 
+    /**
+     * 9. إلغاء الطلب من قبل السائق (قبل القبول فقط)
+     */
+    public OrderDto cancelOrderByDriver(Long orderId, UUID driverId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // التحقق أن الطلب في حالة PENDING
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new BusinessException("Order cannot be cancelled. Current status: " + order.getStatus());
+        }
+
+        // السائق يمكنه الإلغاء فقط إذا كان الطلب متاح للجميع (لم يقبله أحد)
+        if (order.getDriverId() != null) {
+            throw new BusinessException("Order is already accepted by a driver");
+        }
+
+        // تحديث الحالة
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setRejectionReason("Cancelled by driver");
+
+        Order updated = orderRepository.save(order);
+
+        // إشعار المستخدم
+        userRepository.findById(order.getUserId())
+                .ifPresent(user -> whatsAppService.sendOrderCancellation(
+                        user.getPhone(),
+                        order.getTrackingNumber(),
+                        "Driver cancelled the order"
+                ));
+
+        return enrichDto(orderMapper.toDto(updated));
+    }
+
+    /**
+     * 10. إلغاء الطلب من قبل المستخدم
+     * - إذا كان الطلب في PENDING: إلغاء مجاني
+     * - إذا كان الطلب في ACCEPTED أو IN_PROGRESS: تحويل deliveryCost للسائق
+     */
+    public OrderDto cancelOrderByUser(Long orderId, UUID userId, String cancellationReason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // التحقق من ملكية الطلب
+        if (!order.getUserId().equals(userId)) {
+            throw new BusinessException("You are not authorized to cancel this order");
+        }
+
+        // لا يمكن الإلغاء بعد استلام الطلب
+        if (order.getStatus() == OrderStatus.IN_THE_WAY ||
+                order.getStatus() == OrderStatus.DELIVERED ||
+                order.getStatus() == OrderStatus.RETURN) {
+            throw new BusinessException("Order cannot be cancelled at this stage: " + order.getStatus());
+        }
+
+        // إذا كان الطلب ملغي أصلاً
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new BusinessException("Order is already cancelled");
+        }
+
+        Wallet userWallet = walletService.getWalletByUserId(userId);
+
+        // الحالة 1: الطلب في PENDING ولم يقبله سائق بعد - إلغاء مجاني
+        if (order.getStatus() == OrderStatus.PENDING && order.getDriverId() == null) {
+            order.setStatus(OrderStatus.CANCELLED);
+            order.setRejectionReason(cancellationReason != null ? cancellationReason : "Cancelled by user");
+
+            Order updated = orderRepository.save(order);
+            return enrichDto(orderMapper.toDto(updated));
+        }
+
+        // الحالة 2: السائق قبل الطلب (ACCEPTED أو IN_PROGRESS) - تحويل deliveryCost للسائق
+        if (order.getDriverId() != null &&
+                (order.getStatus() == OrderStatus.ACCEPTED || order.getStatus() == OrderStatus.IN_PROGRESS)) {
+
+            Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
+
+            // التحقق من رصيد المستخدم
+            if (userWallet.getWalletBalance() < order.getDeliveryCost()) {
+                throw new BusinessException("Insufficient balance to cancel order. Required: " +
+                        order.getDeliveryCost() + ", Available: " + userWallet.getWalletBalance());
+            }
+
+            // تحويل deliveryCost من المستخدم للسائق كتعويض
+            userWallet.setWalletBalance(userWallet.getWalletBalance() - order.getDeliveryCost());
+            driverWallet.setWalletBalance(driverWallet.getWalletBalance() + order.getDeliveryCost());
+
+            walletService.save(userWallet);
+            walletService.save(driverWallet);
+
+            // إذا كان الطلب في IN_PROGRESS، نفك تجميد المبالغ
+            if (order.getStatus() == OrderStatus.IN_PROGRESS) {
+                double totalFrozen = order.getDeliveryCost() * 2;
+                walletService.unfreezeAmount(userWallet, totalFrozen);
+                walletService.unfreezeAmount(driverWallet, order.getInsuranceValue());
+            }
+
+            order.setStatus(OrderStatus.CANCELLED);
+            order.setRejectionReason(cancellationReason != null ? cancellationReason : "Cancelled by user after driver acceptance");
+
+            Order updated = orderRepository.save(order);
+
+            // إشعار السائق
+            userRepository.findById(order.getDriverId())
+                    .ifPresent(driver -> whatsAppService.sendOrderCancellation(
+                            driver.getPhone(),
+                            order.getTrackingNumber(),
+                            "User cancelled the order. You received " + order.getDeliveryCost() + " EGP as compensation"
+                    ));
+
+            return enrichDto(orderMapper.toDto(updated));
+        }
+
+        // حالة افتراضية (لا ينبغي الوصول إليها)
+        throw new BusinessException("Unable to cancel order in current state");
+    }
+
     // ... باقي الـ methods (getUserOrders, getDriverOrders, إلخ) بدون تغيير
 
     private double round(double value) {
@@ -537,6 +654,7 @@ public class OrderService {
         long inTheWay = orders.stream().filter(order -> order.getStatus() == OrderStatus.IN_THE_WAY).count();
         long returned = orders.stream().filter(order -> order.getStatus() == OrderStatus.RETURN).count();
         long delivered = orders.stream().filter(order -> order.getStatus() == OrderStatus.DELIVERED).count();
+        long cancelled = orders.stream().filter(order -> order.getStatus() == OrderStatus.CANCELLED).count();
 
         OrderStatisticsDto statisticsDto = new OrderStatisticsDto();
         statisticsDto.setTotalOrders(orders.size());
@@ -546,6 +664,7 @@ public class OrderService {
         statisticsDto.setInTheWay(inTheWay);
         statisticsDto.setInDelivery(returned);
         statisticsDto.setDelivered(delivered);
+        statisticsDto.setCancelled(cancelled);
         return statisticsDto;
     }
 

@@ -39,6 +39,20 @@ public class WhatsAppService {
 
         send(phone, message);
     }
+    public void sendWasalElkheerConfirmation(String phone, Long orderId) {
+
+        String message = """
+            ✅ Donation Order Confirmed!
+
+            📦 Order ID: %d
+            🙏 Thank you for donating.
+
+            We will notify you once a driver accepts the order.
+            """.formatted(orderId);
+
+        send(phone, message);
+    }
+
 
     /**
      * إشعار قبول السائق
@@ -89,6 +103,22 @@ public class WhatsAppService {
     }
 
     /**
+     * إرسال إشعار إلغاء الطلب
+     */
+    public void sendOrderCancellation(String phone, String trackingNumber, String reason) {
+        String message = """
+                ❌ Order Cancelled
+
+                📦 Tracking Number: %s
+                📝 Reason: %s
+
+                If you have any questions, please contact support.
+                """.formatted(trackingNumber, reason);
+
+        send(phone, message);
+    }
+
+    /**
      * ميثود موحدة للإرسال
      */
     public void send(String phone, String message) {
@@ -114,9 +144,5 @@ public class WhatsAppService {
         }
 
         return normalized + "@c.us";
-    }
-
-    public void sendOrderConfirmation(String phone) {
-
     }
 }

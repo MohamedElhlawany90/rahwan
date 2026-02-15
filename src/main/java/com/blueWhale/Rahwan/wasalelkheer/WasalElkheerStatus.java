@@ -6,7 +6,8 @@ public enum WasalElkheerStatus {
     IN_PROGRESS("In Progress"),
     IN_THE_WAY("In The Way"),
     RETURN("Return"),
-    DELIVERED("Delivered");
+    DELIVERED("Delivered"),
+    CANCELLED("Cancelled");  // جديد
 
     private final String displayName;
 

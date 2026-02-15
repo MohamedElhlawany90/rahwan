@@ -6,5 +6,6 @@ public enum OrderStatus {
     IN_PROGRESS,    // جاري التنفيذ (السائق في الطريق للاستلام)
     IN_THE_WAY,     // في الطريق للتسليم
     RETURN,         // تم الإرجاع
-    DELIVERED       // تم التسليم
+    DELIVERED,       // تم التسليم
+    CANCELLED       // تم إلغاء الطلب
 }

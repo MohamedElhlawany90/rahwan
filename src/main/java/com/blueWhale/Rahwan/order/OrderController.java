@@ -109,6 +109,33 @@ public class OrderController {
     }
 
     /**
+     * 5B. Driver: إلغاء الطلب (قبل القبول فقط)
+     */
+    @PostMapping("/{orderId}/cancel-by-driver")
+    public ResponseEntity<OrderDto> cancelOrderByDriver(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                orderService.cancelOrderByDriver(orderId, principal.getId())
+        );
+    }
+
+    /**
+     * 5C. User: إلغاء الطلب
+     */
+    @PostMapping("/{orderId}/cancel-by-user")
+    public ResponseEntity<OrderDto> cancelOrderByUser(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal, // 🔐
+            @RequestParam(required = false) String reason
+    ) {
+        return ResponseEntity.ok(
+                orderService.cancelOrderByUser(orderId, principal.getId(), reason)
+        );
+    }
+
+    /**
      * 6. Driver: تحديث "في الطريق"
      */
     @PatchMapping("/{orderId}/in-the-way")

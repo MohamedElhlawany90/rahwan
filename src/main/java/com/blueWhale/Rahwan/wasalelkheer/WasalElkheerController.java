@@ -134,6 +134,33 @@ public class WasalElkheerController {
     }
 
     /**
+     * 8B. Driver: إلغاء الطلب (قبل القبول فقط)
+     */
+    @PostMapping("/{orderId}/cancel-by-driver")
+    public ResponseEntity<WasalElkheerDto> cancelOrderByDriver(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal // 🔐
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.cancelOrderByDriver(orderId, principal.getId())
+        );
+    }
+
+    /**
+     * 8C. User: إلغاء الطلب
+     */
+    @PostMapping("/{orderId}/cancel-by-user")
+    public ResponseEntity<WasalElkheerDto> cancelOrderByUser(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal, // 🔐
+            @RequestParam(required = false) String reason
+    ) {
+        return ResponseEntity.ok(
+                wasalElkheerService.cancelOrderByUser(orderId, principal.getId(), reason)
+        );
+    }
+
+    /**
      * 9. User: جلب طلبات المستخدم
      */
     @GetMapping("/user/{userId}")

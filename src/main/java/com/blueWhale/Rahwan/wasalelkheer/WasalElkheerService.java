@@ -41,7 +41,7 @@ public class WasalElkheerService {
     private final CharityRepository charityRepository;
     private final WhatsAppService whatsAppService;
     private final OrderOtpService otpService ;
-    private final WasalElkheerMapper orderMapper;
+
 
     public CreationWasalElkheerDto createWasalElkheer(WasalElkheerForm form, UUID userId) throws IOException {
 
@@ -99,8 +99,12 @@ public class WasalElkheerService {
 
         WasalElkheer updated = wasalElkheerRepository.save(order);
 
-        userRepository.findById(order.getUserId()).ifPresent(user -> whatsAppService.sendOrderConfirmation(user.getPhone()));
-        return enrichDto(wasalElkheerMapper.toDto(updated));
+        userRepository.findById(order.getUserId()).ifPresent(user ->
+                whatsAppService.sendWasalElkheerConfirmation(
+                        user.getPhone(),
+                        updated.getId()
+                )
+        );        return enrichDto(wasalElkheerMapper.toDto(updated));
 
     }
     public CreationWasalElkheerDto updateOrder(Long orderId, WasalElkheerForm form, UUID userId) throws IOException {
@@ -226,7 +230,7 @@ public class WasalElkheerService {
             );
         }
 
-        return enrichDto(orderMapper.toDto(updated));
+        return enrichDto(wasalElkheerMapper.toDto(updated));
     }
 
     public WasalElkheerDto confirmPickup(Long orderId, String otpFromUser) {
@@ -311,6 +315,96 @@ public class WasalElkheerService {
 
         WasalElkheer updated = wasalElkheerRepository.save(order);
         return enrichDto(wasalElkheerMapper.toDto(updated));
+    }
+
+    /**
+     * إلغاء الطلب من قبل السائق (قبل القبول فقط)
+     */
+    public WasalElkheerDto cancelOrderByDriver(Long orderId, UUID driverId) {
+        WasalElkheer order = wasalElkheerRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // التحقق أن الطلب في حالة PENDING
+        if (order.getStatus() != WasalElkheerStatus.PENDING) {
+            throw new BusinessException("Order cannot be cancelled. Current status: " + order.getStatus());
+        }
+
+        // السائق يمكنه الإلغاء فقط إذا كان الطلب متاح للجميع (لم يقبله أحد)
+        if (order.getDriverId() != null) {
+            throw new BusinessException("Order is already accepted by a driver");
+        }
+
+        // تحديث الحالة
+        order.setStatus(WasalElkheerStatus.CANCELLED);
+
+        WasalElkheer updated = wasalElkheerRepository.save(order);
+
+        // إشعار المستخدم
+        userRepository.findById(order.getUserId())
+                .ifPresent(user -> whatsAppService.sendOrderCancellation(
+                        user.getPhone(),
+                        order.getId().toString(),
+                        "Driver cancelled the donation order"
+                ));
+
+        return enrichDto(wasalElkheerMapper.toDto(updated));
+    }
+
+    /**
+     * إلغاء الطلب من قبل المستخدم
+     * - إذا كان الطلب في PENDING: إلغاء مجاني
+     * - إذا كان الطلب في ACCEPTED أو IN_PROGRESS: يتم الإلغاء مع إشعار السائق
+     */
+    public WasalElkheerDto cancelOrderByUser(Long orderId, UUID userId, String cancellationReason) {
+        WasalElkheer order = wasalElkheerRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // التحقق من ملكية الطلب
+        if (!order.getUserId().equals(userId)) {
+            throw new BusinessException("You are not authorized to cancel this order");
+        }
+
+        // لا يمكن الإلغاء بعد استلام الطلب
+        if (order.getStatus() == WasalElkheerStatus.IN_THE_WAY ||
+                order.getStatus() == WasalElkheerStatus.DELIVERED ||
+                order.getStatus() == WasalElkheerStatus.RETURN) {
+            throw new BusinessException("Order cannot be cancelled at this stage: " + order.getStatus());
+        }
+
+        // إذا كان الطلب ملغي أصلاً
+        if (order.getStatus() == WasalElkheerStatus.CANCELLED) {
+            throw new BusinessException("Order is already cancelled");
+        }
+
+        // الحالة 1: الطلب في PENDING ولم يقبله سائق بعد - إلغاء مجاني
+        if (order.getStatus() == WasalElkheerStatus.PENDING && order.getDriverId() == null) {
+            order.setStatus(WasalElkheerStatus.CANCELLED);
+
+            WasalElkheer updated = wasalElkheerRepository.save(order);
+            return enrichDto(wasalElkheerMapper.toDto(updated));
+        }
+
+        // الحالة 2: السائق قبل الطلب (ACCEPTED أو IN_PROGRESS) - إلغاء مع إشعار
+        if (order.getDriverId() != null &&
+                (order.getStatus() == WasalElkheerStatus.ACCEPTED || order.getStatus() == WasalElkheerStatus.IN_PROGRESS)) {
+
+            order.setStatus(WasalElkheerStatus.CANCELLED);
+
+            WasalElkheer updated = wasalElkheerRepository.save(order);
+
+            // إشعار السائق
+            userRepository.findById(order.getDriverId())
+                    .ifPresent(driver -> whatsAppService.sendOrderCancellation(
+                            driver.getPhone(),
+                            order.getId().toString(),
+                            "User cancelled the donation order" + (cancellationReason != null ? ": " + cancellationReason : "")
+                    ));
+
+            return enrichDto(wasalElkheerMapper.toDto(updated));
+        }
+
+        // حالة افتراضية (لا ينبغي الوصول إليها)
+        throw new BusinessException("Unable to cancel order in current state");
     }
 
 

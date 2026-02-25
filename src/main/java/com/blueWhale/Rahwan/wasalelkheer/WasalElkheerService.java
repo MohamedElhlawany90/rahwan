@@ -269,7 +269,7 @@ public class WasalElkheerService {
                 .ifPresent(charity -> {
                     if (charity.getPhone() != null && !charity.getPhone().isEmpty()) {
                         // استخدام sendOtp للجمعية
-                        whatsAppService.sendOtp(charity.getPhone(), deliveryOtp);
+                        whatsAppService.sendPickupOtpToSender(charity.getPhone(),charity.getNameEn(), deliveryOtp);
                     }
                 });
 

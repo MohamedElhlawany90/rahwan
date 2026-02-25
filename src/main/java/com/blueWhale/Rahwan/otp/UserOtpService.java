@@ -34,7 +34,7 @@ public class UserOtpService {
         userRepository.save(user);
 
         // إرسال OTP عبر WhatsApp
-        whatsAppService.sendOtp(phone, otp);
+        whatsAppService.sendUserVerificationOtp(phone, otp);
 
         return otp;
     }

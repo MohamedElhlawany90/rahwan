@@ -6,43 +6,27 @@ package com.blueWhale.Rahwan.user;
  * Defines the three main roles in the system
  */
 public enum UserRole {
-    USER("User", "مستخدم"),
-    DRIVER("Driver", "سائق"),
-    ADMIN("Admin", "مدير");
-
-    private final String displayNameEn;
-    private final String displayNameAr;
-
-    UserRole(String displayNameEn, String displayNameAr) {
-        this.displayNameEn = displayNameEn;
-        this.displayNameAr = displayNameAr;
-    }
-
-    public String getDisplayNameEn() {
-        return displayNameEn;
-    }
-
-    public String getDisplayNameAr() {
-        return displayNameAr;
-    }
+    user,
+    driver,
+    admin;
 
     /**
      * Convert from String (for backward compatibility)
      */
     public static UserRole fromString(String role) {
         if (role == null) {
-            return USER; // default
+            return user; // default
         }
 
         switch (role.toLowerCase()) {
             case "user":
-                return USER;
+                return user;
             case "driver":
-                return DRIVER;
+                return driver;
             case "admin":
-                return ADMIN;
+                return admin;
             default:
-                return USER;
+                return user;
         }
     }
 }

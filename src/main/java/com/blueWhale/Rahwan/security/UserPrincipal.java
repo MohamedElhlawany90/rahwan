@@ -29,7 +29,7 @@ public class UserPrincipal implements UserDetails {
                 user.getName(),
                 user.getPhone(),
                 user.getPassword(),
-                user.getRole() != null ? user.getRole() : UserRole.USER,
+                user.getRole() != null ? user.getRole() : UserRole.user,
                 user.isActive()
         );
     }
@@ -69,14 +69,14 @@ public class UserPrincipal implements UserDetails {
 
     // Helper methods
     public boolean isUser() {
-        return role == UserRole.USER;
+        return role == UserRole.user;
     }
 
     public boolean isDriver() {
-        return role == UserRole.DRIVER;
+        return role == UserRole.driver;
     }
 
     public boolean isAdmin() {
-        return role == UserRole.ADMIN;
+        return role == UserRole.admin;
     }
 }

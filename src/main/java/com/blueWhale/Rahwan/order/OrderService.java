@@ -78,6 +78,7 @@ public class OrderService {
         order.setAppCommission(appCommission);
         order.setTrackingNumber(generateTrackingNumber());
         order.setCreationStatus(CreationStatus.CREATED);
+        order.setStatus(OrderStatus.PENDING);
 
         // رفع الصورة
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
@@ -134,7 +135,7 @@ public class OrderService {
         // إرسال إشعارات
         User user = userRepository.findById(order.getUserId()).orElse(null);
         if (user != null) {
-            whatsAppService.sendOtp(user.getPhone(), pickupOtp);
+            whatsAppService.sendPickupOtpToSender(user.getPhone(),user.getName(), pickupOtp);
             whatsAppService.sendOrderConfirmation(
                     user.getPhone(),
                     order.getTrackingNumber(),
@@ -288,7 +289,7 @@ public class OrderService {
                 .ifPresent(user -> whatsAppService.sendDriverAcceptedNotification(
                         user.getPhone(),
                         driver.getName(),
-                        order.getOtpForPickup()
+                        order.getTrackingNumber()  // ✅ نرسل رقم التتبع فقط
                 ));
 
         return enrichDto(orderMapper.toDto(updated));
@@ -318,7 +319,7 @@ public class OrderService {
         }
 
         // توليد OTP للتسليم
-        String deliveryOtp = otpService.generatePickupOtp();
+        String deliveryOtp = otpService.generateDeliveryOtp();
         order.setOtpForDelivery(deliveryOtp);
 
         // تجميد insurance value من Driver
@@ -489,13 +490,14 @@ public class OrderService {
             throw new BusinessException("Only drivers can cancel orders");
         }
 
-        if (order.getStatus() != OrderStatus.PENDING) {
+        if (order.getStatus() != OrderStatus.PENDING &&
+                order.getStatus() != OrderStatus.ACCEPTED) {
             throw new BusinessException("Order cannot be cancelled. Current status: " + order.getStatus());
         }
 
-        if (order.getDriverId() != null) {
-            throw new BusinessException("Order is already accepted by a driver");
-        }
+//        if (order.getDriverId() != null) {
+//            throw new BusinessException("Order is already accepted by a driver");
+//        }
 
         // فك تجميد من User
         Wallet userWallet = walletService.getWalletByUserId(order.getUserId());

@@ -53,7 +53,7 @@ public class OrderDto {
     private Boolean receiverPaysShipping;
 
     // Status
-    private OrderStatus status;
+    private OrderStatus status = OrderStatus.PENDING;
 //    private CreationStatus creationStatus;
     private String trackingNumber;
     private double distanceKm;

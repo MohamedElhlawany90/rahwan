@@ -49,20 +49,20 @@ public class User {
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private UserRole role = UserRole.USER;
+    private UserRole role = UserRole.user;
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
     // Helper methods for role checking
     public boolean isUser() {
-        return this.role == UserRole.USER;
+        return this.role == UserRole.user;
     }
 
     public boolean isDriver() {
-        return this.role == UserRole.DRIVER;
+        return this.role == UserRole.driver;
     }
 
     public boolean isAdmin() {
-        return this.role == UserRole.ADMIN;
+        return this.role == UserRole.admin;
     }
 }

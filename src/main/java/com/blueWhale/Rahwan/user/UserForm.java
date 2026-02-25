@@ -30,5 +30,5 @@ public class UserForm {
      */
     @NotNull(message = "Role is required")
     @Builder.Default
-    private UserRole role = UserRole.USER;
+    private UserRole role = UserRole.user;
 }

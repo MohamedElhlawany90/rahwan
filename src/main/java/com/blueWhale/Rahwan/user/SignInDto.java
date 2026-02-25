@@ -17,6 +17,7 @@ public class SignInDto {
     private String type;
     private String profileImage;
     private boolean active;
+    private UserRole role;
     private boolean verifiedPhone;
     private LocalDateTime createdAt;
 

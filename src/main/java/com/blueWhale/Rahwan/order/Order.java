@@ -25,6 +25,8 @@ public class Order {
 
     private String photo;
 
+    private String driverPhoto;
+
     // Pickup Location
     private double pickupLatitude;
     private double pickupLongitude;

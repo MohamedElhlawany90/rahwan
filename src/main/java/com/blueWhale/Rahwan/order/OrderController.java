@@ -218,8 +218,8 @@ public class OrderController {
      * Authorization: Public (or authenticated user)
      */
     @GetMapping("/{orderId}")
-    public ResponseEntity<OrderDto> getOrder(@PathVariable Long orderId) {
-        return ResponseEntity.ok(orderService.getOrderById(orderId));
+    public ResponseEntity<DriverDto> getOrder(@PathVariable Long orderId) {
+        return ResponseEntity.ok(orderService.getOrderByIdAsDriverDto(orderId));
     }
 
     /**

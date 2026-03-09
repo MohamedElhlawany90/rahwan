@@ -676,10 +676,10 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
-    public OrderDto getOrderById(Long orderId) {
+    public DriverDto getOrderByIdAsDriverDto(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-        return enrichDto(orderMapper.toDto(order));
+        return enrichDriverDto(orderMapper.toDriverDto(order));
     }
 
     public OrderDto getOrderByTrackingNumber(String trackingNumber) {
@@ -767,5 +767,19 @@ public class OrderService {
             );
         }
         return creationDto;
+    }
+    private DriverDto enrichDriverDto(DriverDto driverDto) {
+        if (driverDto.getUserId() != null) {
+            userRepository.findById(driverDto.getUserId()).ifPresent(user ->
+                    driverDto.setUserName(user.getName())
+            );
+        }
+        if (driverDto.getDriverId() != null) {
+            userRepository.findById(driverDto.getDriverId()).ifPresent(driver -> {
+                driverDto.setDriverName(driver.getName());
+                driverDto.setDriverPhoto(driver.getProfileImage());
+            });
+        }
+        return driverDto;
     }
 }

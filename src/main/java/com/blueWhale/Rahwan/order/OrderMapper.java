@@ -14,4 +14,9 @@ public interface OrderMapper {
     @Mapping(source = "photo", target = "photo")
     @Mapping(source = "creationStatus", target = "status")
     CreationDto toCreationDto(Order order);
+
+    @Mapping(source = "photo", target = "photo")
+    @Mapping(source = "driverPhoto", target = "driverPhoto")
+    @Mapping(source = "status", target = "status")
+    DriverDto toDriverDto(Order order);
 }

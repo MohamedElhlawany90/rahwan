@@ -41,32 +41,48 @@ public class OrderService {
     private final WhatsAppService whatsAppService;
     private final CommissionSettingsService commissionSettingsService;
 
-    /**
-     * 1. إنشاء طلب جديد من User
-     * Status: CREATED (بدون أي تجميد)
-     */
-    public CreationDto createOrder(OrderForm orderForm, UUID userId) throws IOException {
+    // ==================== Helper: Role Checks ====================
 
+    private User getActiveUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (!user.isActive()) throw new BusinessException("Account is not active");
+        return user;
+    }
 
-        if (!user.isActive()) {
-            throw new BusinessException("User account is not active");
-        }
+    private void requireUserRole(User user) {
+        if (!user.isUser())
+            throw new BusinessException("This action is only allowed for users");
+    }
+
+    private void requireDriverRole(User user) {
+        if (!user.isDriver())
+            throw new BusinessException("This action is only allowed for drivers");
+    }
+
+    private void requireAdminRole(User user) {
+        if (!user.isAdmin())
+            throw new BusinessException("This action is only allowed for admins");
+    }
+
+    // ==================== Order Operations ====================
+
+    /**
+     * 1. إنشاء طلب جديد
+     * Authorization: USER role فقط
+     */
+    public CreationDto createOrder(OrderForm orderForm, UUID userId) throws IOException {
+        User user = getActiveUser(userId);
+        requireUserRole(user); // ✅ السواق الـ pure مينفعش يعمل أوردر
 
         PricingDetails cost = costCalculationService.calculateCost(
-                orderForm.getPickupLatitude(),
-                orderForm.getPickupLongitude(),
-                orderForm.getRecipientLatitude(),
-                orderForm.getRecipientLongitude(),
+                orderForm.getPickupLatitude(), orderForm.getPickupLongitude(),
+                orderForm.getRecipientLatitude(), orderForm.getRecipientLongitude(),
                 orderForm.getInsuranceValue()
         );
 
-        // جلب نسبة العمولة
         CommissionSettings commissionSettings = commissionSettingsService.getActiveSettings();
         double commissionRate = commissionSettings.getCommissionRate();
-
-        // حساب العمولة من insurance value (لأن دي اللي هتتحول للتطبيق)
         double totalCost = cost.getTotalCost();
         double appCommission = round((orderForm.getInsuranceValue() * commissionRate) / 100.0);
 
@@ -80,12 +96,9 @@ public class OrderService {
         order.setCreationStatus(CreationStatus.CREATED);
         order.setStatus(OrderStatus.PENDING);
 
-        // رفع الصورة
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
         if (orderForm.getPhoto() != null) {
-            if (!Files.exists(uploadDir)) {
-                Files.createDirectories(uploadDir);
-            }
+            if (!Files.exists(uploadDir)) Files.createDirectories(uploadDir);
             byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
             Path path = Paths.get(UPLOADED_FOLDER + new Date().getTime() + "A-A" + orderForm.getPhoto().getOriginalFilename());
             String url = Files.write(path, bytes).toUri().getPath();
@@ -98,82 +111,65 @@ public class OrderService {
             order.setPhoto(url.substring(url.lastIndexOf("/") + 1));
         }
 
-        Order saved = orderRepository.save(order);
-
-        return enrichCreationDto(orderMapper.toCreationDto(saved));
+        return enrichCreationDto(orderMapper.toCreationDto(orderRepository.save(order)));
     }
 
     /**
-     * 2. تأكيد الطلب
-     * Status: CREATED → PENDING
-     * تجميد: ضعف تمن التوصيل من User
+     * 2. تأكيد الطلب (تجميد المبلغ)
+     * Authorization: USER role (صاحب الطلب فقط)
      */
-    public OrderDto confirmOrder(Long orderId) {
+    public OrderDto confirmOrder(Long orderId, UUID userId) {
+        User user = getActiveUser(userId);
+        requireUserRole(user); // ✅
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-        if (order.getCreationStatus() != CreationStatus.CREATED) {
-            throw new RuntimeException("Order must be in CREATED status to confirm");
-        }
+        if (!order.getUserId().equals(userId))
+            throw new BusinessException("You are not the owner of this order");
 
-        // توليد OTP للاستلام
+        if (order.getCreationStatus() != CreationStatus.CREATED)
+            throw new RuntimeException("Order must be in CREATED status to confirm");
+
         String pickupOtp = otpService.generatePickupOtp();
         order.setOtpForPickup(pickupOtp);
 
-        // تجميد ضعف تمن التوصيل من User
         Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
-        double userFreezeAmount = order.getDeliveryCost() * 2;
+        walletService.freezeAmount(userWallet, order.getDeliveryCost() * 2);
 
-        walletService.freezeAmount(userWallet, userFreezeAmount);
-
-        // تحديث الحالة
         order.setStatus(OrderStatus.PENDING);
         order.setConfirmedAt(LocalDateTime.now());
 
         Order updated = orderRepository.save(order);
 
-        // إرسال إشعارات
-        User user = userRepository.findById(order.getUserId()).orElse(null);
-        if (user != null) {
-            whatsAppService.sendPickupOtpToSender(user.getPhone(),user.getName(), pickupOtp);
-            whatsAppService.sendOrderConfirmation(
-                    user.getPhone(),
-                    order.getTrackingNumber(),
-                    order.getDeliveryCost()
-            );
-        }
+        whatsAppService.sendPickupOtpToSender(user.getPhone(), user.getName(), pickupOtp);
+        whatsAppService.sendOrderConfirmation(user.getPhone(), order.getTrackingNumber(), order.getDeliveryCost());
 
         return enrichDto(orderMapper.toDto(updated));
     }
 
     /**
      * 3. تحديث الطلب
-     * Authorization: User (owner) or Admin
-     * يمكن التعديل فقط في حالة CREATED أو PENDING (قبل قبول السائق)
+     * Authorization: USER role (صاحب الطلب) أو ADMIN
      */
     public CreationDto updateOrder(Long orderId, OrderForm orderForm, UUID userId) throws IOException {
+        User currentUser = getActiveUser(userId);
+
+        if (!currentUser.isUser() && !currentUser.isAdmin()) // ✅ لازم يكون user أو admin
+            throw new BusinessException("This action is only allowed for users or admins");
 
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        User currentUser = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (!order.getUserId().equals(userId) && !currentUser.isAdmin()) {
+        if (!order.getUserId().equals(userId) && !currentUser.isAdmin())
             throw new BusinessException("You are not allowed to update this order");
-        }
 
-        // يمكن التعديل فقط قبل قبول السائق
-        if (order.getStatus() != null && order.getStatus() != OrderStatus.PENDING) {
+        if (order.getStatus() != null && order.getStatus() != OrderStatus.PENDING)
             throw new BusinessException("Order cannot be updated in current status");
-        }
 
-        // إعادة حساب التكلفة والعمولة
         PricingDetails cost = costCalculationService.calculateCost(
-                orderForm.getPickupLatitude(),
-                orderForm.getPickupLongitude(),
-                orderForm.getRecipientLatitude(),
-                orderForm.getRecipientLongitude(),
+                orderForm.getPickupLatitude(), orderForm.getPickupLongitude(),
+                orderForm.getRecipientLatitude(), orderForm.getRecipientLongitude(),
                 orderForm.getInsuranceValue()
         );
 
@@ -182,20 +178,12 @@ public class OrderService {
         double totalCost = cost.getTotalCost();
         double appCommission = round((orderForm.getInsuranceValue() * commissionRate) / 100.0);
 
-        // إذا كان الطلب في PENDING، نحتاج نعدل المبلغ المجمد
         if (order.getStatus() == OrderStatus.PENDING) {
             Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
-
-            // فك التجميد القديم
-            double oldFreezeAmount = order.getDeliveryCost() * 2;
-            walletService.unfreezeAmount(userWallet, oldFreezeAmount);
-
-            // تجميد جديد بالسعر الجديد
-            double newFreezeAmount = totalCost * 2;
-            walletService.freezeAmount(userWallet, newFreezeAmount);
+            walletService.unfreezeAmount(userWallet, order.getDeliveryCost() * 2);
+            walletService.freezeAmount(userWallet, totalCost * 2);
         }
 
-        // تحديث البيانات
         order.setPickupLatitude(orderForm.getPickupLatitude());
         order.setPickupLongitude(orderForm.getPickupLongitude());
         order.setPickupAddress(orderForm.getPickupAddress());
@@ -217,12 +205,9 @@ public class OrderService {
         order.setAllowInspection(orderForm.getAllowInspection());
         order.setReceiverPaysShipping(orderForm.getReceiverPaysShipping());
 
-        // تحديث الصورة
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
         if (orderForm.getPhoto() != null && !orderForm.getPhoto().isEmpty()) {
-            if (!Files.exists(uploadDir)) {
-                Files.createDirectories(uploadDir);
-            }
+            if (!Files.exists(uploadDir)) Files.createDirectories(uploadDir);
             byte[] bytes = ImageUtility.compressImage(orderForm.getPhoto().getBytes());
             String fileName = new Date().getTime() + "A-A" + orderForm.getPhoto().getOriginalFilename();
             Path path = uploadDir.resolve(fileName);
@@ -236,47 +221,30 @@ public class OrderService {
             order.setPhoto(fileName);
         }
 
-        Order saved = orderRepository.save(order);
-        return enrichCreationDto(orderMapper.toCreationDto(saved));
+        return enrichCreationDto(orderMapper.toCreationDto(orderRepository.save(order)));
     }
 
     /**
      * 4. السائق يقبل الطلب
-     * Status: PENDING → ACCEPTED
-     * تجميد: بدون تجميد (التجميد يحصل عند الاستلام)
-     * شرط: السائق لازم يكون عنده رصيد > insurance value للتجميد لاحقاً
+     * Authorization: DRIVER role فقط
      */
     public OrderDto driverConfirmOrder(Long orderId, UUID driverId) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅ موجودة بالفعل
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        User driver = userRepository.findById(driverId)
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
-
-        if (!driver.isDriver()) {
-            throw new BusinessException("Only drivers can accept orders");
-        }
-
-        if (!driver.isActive()) {
-            throw new BusinessException("Driver account is not active");
-        }
-
-        if (order.getStatus() != OrderStatus.PENDING) {
+        if (order.getStatus() != OrderStatus.PENDING)
             throw new BusinessException("Order cannot be accepted in current status");
-        }
 
-        if (order.getDriverId() != null) {
+        if (order.getDriverId() != null)
             throw new BusinessException("Order already accepted by another driver");
-        }
 
-        // التحقق من رصيد السائق (لازم يكون عنده رصيد للتجميد لاحقاً)
         Wallet driverWallet = walletService.getWalletByUserId(driverId);
-        if (driverWallet.getWalletBalance() < order.getInsuranceValue()) {
-            throw new BusinessException(
-                    "Insufficient balance. You need at least " + order.getInsuranceValue() +
-                            " EGP to accept this order. Current balance: " + driverWallet.getWalletBalance() + " EGP"
-            );
-        }
+        if (driverWallet.getWalletBalance() < order.getInsuranceValue())
+            throw new BusinessException("Insufficient balance. You need at least " + order.getInsuranceValue() +
+                    " EGP to accept this order. Current balance: " + driverWallet.getWalletBalance() + " EGP");
 
         order.setDriverId(driverId);
         order.setStatus(OrderStatus.ACCEPTED);
@@ -284,12 +252,9 @@ public class OrderService {
 
         Order updated = orderRepository.save(order);
 
-        // إشعار المستخدم
         userRepository.findById(order.getUserId())
                 .ifPresent(user -> whatsAppService.sendDriverAcceptedNotification(
-                        user.getPhone(),
-                        driver.getName(),
-                        order.getTrackingNumber()  // ✅ نرسل رقم التتبع فقط
+                        user.getPhone(), driver.getName(), order.getTrackingNumber()
                 ));
 
         return enrichDto(orderMapper.toDto(updated));
@@ -297,162 +262,110 @@ public class OrderService {
 
     /**
      * 5. السائق يؤكد الاستلام بـ OTP
-     * Status: ACCEPTED → IN_PROGRESS
-     * تجميد: insurance value من Driver
-     * Authorization: Driver who accepted the order
+     * Authorization: DRIVER role + صاحب الطلب
      */
     public OrderDto confirmPickup(Long orderId, UUID driverId, String otp) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        // التحقق من أن السائق هو نفسه اللي قبل الطلب
-        if (!order.getDriverId().equals(driverId)) {
+        if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the driver who accepted this order can confirm pickup");
-        }
 
-        if (order.getStatus() != OrderStatus.ACCEPTED) {
+        if (order.getStatus() != OrderStatus.ACCEPTED)
             throw new BusinessException("Order must be in ACCEPTED status");
-        }
 
-        if (!otp.equals(order.getOtpForPickup())) {
+        if (!otp.equals(order.getOtpForPickup()))
             throw new BusinessException("Invalid OTP");
-        }
 
-        // توليد OTP للتسليم
         String deliveryOtp = otpService.generateDeliveryOtp();
         order.setOtpForDelivery(deliveryOtp);
 
-        // تجميد insurance value من Driver
         Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
         walletService.freezeAmount(driverWallet, order.getInsuranceValue());
 
-        // تحديث الحالة
         order.setPickupConfirmed(true);
         order.setStatus(OrderStatus.IN_PROGRESS);
         order.setPickedUpAt(LocalDateTime.now());
 
         Order updated = orderRepository.save(order);
 
-        // إرسال OTP للمستلم
-        whatsAppService.sendDeliveryOtpToRecipient(
-                order.getRecipientPhone(),
-                order.getRecipientName(),
-                deliveryOtp
-        );
+        whatsAppService.sendDeliveryOtpToRecipient(order.getRecipientPhone(), order.getRecipientName(), deliveryOtp);
 
         return enrichDto(orderMapper.toDto(updated));
     }
 
     /**
      * 6. السائق يؤكد التسليم بـ OTP
-     * Status: IN_PROGRESS/IN_THE_WAY → DELIVERED
-     *
-     * العمليات المالية:
-     * 1. فك تجميد ضعف الشحن من User
-     * 2. فك تجميد insurance value من Driver
-     * 3. تحويل (insurance value - commission) من Driver للUser
-     * 4. commission يروح للتطبيق (نحتفظ بيه في مكان معين)
-     * 5. Driver بياخد deliveryCost كاش من المستلم
-     *
-     * Authorization: Driver who accepted the order
+     * Authorization: DRIVER role + صاحب الطلب
      */
     public OrderDto confirmDelivery(Long orderId, UUID driverId, String otp) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        // التحقق من أن السائق هو نفسه اللي قبل الطلب
-        if (!order.getDriverId().equals(driverId)) {
+        if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the driver who accepted this order can confirm delivery");
-        }
 
-        if (order.getStatus() != OrderStatus.IN_PROGRESS && order.getStatus() != OrderStatus.IN_THE_WAY) {
+        if (order.getStatus() != OrderStatus.IN_PROGRESS && order.getStatus() != OrderStatus.IN_THE_WAY)
             throw new BusinessException("Order must be IN_PROGRESS or IN_THE_WAY");
-        }
 
-        if (!otp.equals(order.getOtpForDelivery())) {
+        if (!otp.equals(order.getOtpForDelivery()))
             throw new BusinessException("Invalid delivery OTP");
-        }
 
         order.setDeliveryConfirmed(true);
         order.setStatus(OrderStatus.DELIVERED);
         order.setDeliveredAt(LocalDateTime.now());
 
-        // العمليات المالية
         Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
         Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
 
-        // 1. فك تجميد ضعف الشحن من User
-        double userFrozenAmount = order.getDeliveryCost() * 2;
-        walletService.unfreezeAmount(userWallet, userFrozenAmount);
-
-        // 2. فك تجميد insurance value من Driver
+        walletService.unfreezeAmount(userWallet, order.getDeliveryCost() * 2);
         walletService.unfreezeAmount(driverWallet, order.getInsuranceValue());
 
-        // 3. تحويل (insurance value - commission) من Driver للUser
-        //    هنا السائق بيدفع تمن الحاجة اللي استلمها للمستخدم
-        //    ويخصم منه commission التطبيق
         double userReceives = order.getInsuranceValue() - order.getAppCommission();
 
-        if (driverWallet.getWalletBalance() < order.getInsuranceValue()) {
+        if (driverWallet.getWalletBalance() < order.getInsuranceValue())
             throw new BusinessException("Driver has insufficient balance");
-        }
 
-        // خصم insurance value من السائق
         driverWallet.setWalletBalance(driverWallet.getWalletBalance() - order.getInsuranceValue());
-
-        // إضافة (insurance value - commission) للمستخدم
         userWallet.setWalletBalance(userWallet.getWalletBalance() + userReceives);
-
-        // 4. الـ commission (appCommission) يروح للتطبيق
-        //    هنا ممكن نعملها transfer لمحفظة admin أو نسيبها كـ revenue
-        //    مؤقتاً: الـ commission بيضيع (لأننا خصمناه من insurance value)
-        //    لو عايزين نحفظه، نعمل:
-        //    - إما محفظة للـ app
-        //    - أو جدول transactions يسجل الـ revenue
 
         walletService.save(userWallet);
         walletService.save(driverWallet);
 
         Order updated = orderRepository.save(order);
 
-        // إشعارات
         userRepository.findById(order.getUserId())
-                .ifPresent(user -> whatsAppService.sendDeliveryConfirmation(
-                        user.getPhone(),
-                        order.getTrackingNumber()
-                ));
+                .ifPresent(user -> whatsAppService.sendDeliveryConfirmation(user.getPhone(), order.getTrackingNumber()));
 
         return enrichDto(orderMapper.toDto(updated));
     }
 
     /**
      * 7. السائق يرجع الطلب
-     * Status: IN_PROGRESS/IN_THE_WAY → RETURN
-     *
-     * العمليات المالية:
-     * 1. فك تجميد ضعف الشحن من User
-     * 2. فك تجميد insurance value من Driver
-     * 3. بدون أي تحويلات (السائق رجع الحاجة)
-     *
-     * Authorization: Driver who accepted the order
+     * Authorization: DRIVER role + صاحب الطلب
      */
     public OrderDto returnOrder(Long orderId, UUID driverId) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        // التحقق من أن السائق هو نفسه اللي قبل الطلب
-        if (!order.getDriverId().equals(driverId)) {
+        if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the driver who accepted this order can return it");
-        }
 
-        if (!order.isPickupConfirmed()) {
+        if (!order.isPickupConfirmed())
             throw new BusinessException("Cannot return order that wasn't picked up");
-        }
 
         order.setStatus(OrderStatus.RETURN);
         order.setDeliveredAt(LocalDateTime.now());
 
-        // فك التجميد فقط
         Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
         Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
 
@@ -461,99 +374,68 @@ public class OrderService {
 
         Order updated = orderRepository.save(order);
 
-        // إشعار المستخدم
         userRepository.findById(order.getUserId())
                 .ifPresent(user -> whatsAppService.sendOrderCancellation(
-                        user.getPhone(),
-                        order.getTrackingNumber(),
-                        "Order returned to sender"
+                        user.getPhone(), order.getTrackingNumber(), "Order returned to sender"
                 ));
 
         return enrichDto(orderMapper.toDto(updated));
     }
 
     /**
-     * 8. السائق يلغي الطلب (قبل القبول فقط)
-     * Status: PENDING → CANCELLED
-     *
-     * العمليات المالية:
-     * 1. فك تجميد ضعف الشحن من User (لأن الطلب اتلغى)
+     * 8. السائق يلغي الطلب
+     * Authorization: DRIVER role فقط
      */
     public OrderDto cancelOrderByDriver(Long orderId, UUID driverId) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅ موجودة بالفعل
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        User driver = userRepository.findById(driverId)
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
-
-        if (!driver.isDriver()) {
-            throw new BusinessException("Only drivers can cancel orders");
-        }
-
-        if (order.getStatus() != OrderStatus.PENDING &&
-                order.getStatus() != OrderStatus.ACCEPTED) {
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.ACCEPTED)
             throw new BusinessException("Order cannot be cancelled. Current status: " + order.getStatus());
-        }
 
-//        if (order.getDriverId() != null) {
-//            throw new BusinessException("Order is already accepted by a driver");
-//        }
-
-        // فك تجميد من User
         Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
         walletService.unfreezeAmount(userWallet, order.getDeliveryCost() * 2);
 
         order.setStatus(OrderStatus.CANCELLED);
-        Order updated = orderRepository.save(order);
-
-        return enrichDto(orderMapper.toDto(updated));
+        return enrichDto(orderMapper.toDto(orderRepository.save(order)));
     }
 
     /**
      * 9. المستخدم يلغي الطلب
-     * Authorization: User (owner) or Admin
-     *
-     * السيناريوهات:
-     * 1. PENDING + لم يقبله سائق: إلغاء مجاني + فك التجميد
-     * 2. ACCEPTED/IN_PROGRESS: يدفع deliveryCost للسائق كتعويض + فك التجميد
+     * Authorization: USER role (صاحب الطلب) أو ADMIN
      */
     public OrderDto cancelOrderByUser(Long orderId, UUID userId, String cancellationReason) {
+        User user = getActiveUser(userId);
+
+        if (!user.isUser() && !user.isAdmin()) // ✅ السواق الـ pure مينفعش يلغي طلب يوزر
+            throw new BusinessException("This action is only allowed for users or admins");
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-        if (!order.getUserId().equals(userId) && !user.isAdmin()) {
+        if (!order.getUserId().equals(userId) && !user.isAdmin())
             throw new BusinessException("You are not authorized to cancel this order");
-        }
 
-        if (order.getStatus() == OrderStatus.DELIVERED ||
-                order.getStatus() == OrderStatus.RETURN) {
+        if (order.getStatus() == OrderStatus.DELIVERED || order.getStatus() == OrderStatus.RETURN)
             throw new BusinessException("Order cannot be cancelled at this stage: " + order.getStatus());
-        }
 
-        if (order.getStatus() == OrderStatus.CANCELLED) {
+        if (order.getStatus() == OrderStatus.CANCELLED)
             throw new BusinessException("Order is already cancelled");
-        }
 
-        // السيناريو 1: PENDING ولم يقبله سائق - إلغاء مجاني
+        // السيناريو 1: PENDING ولم يقبله سائق
         if (order.getStatus() == OrderStatus.PENDING && order.getDriverId() == null) {
             Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
-
-            // فك تجميد ضعف الشحن
             walletService.unfreezeAmount(userWallet, order.getDeliveryCost() * 2);
 
             order.setStatus(OrderStatus.CANCELLED);
             order.setRejectionReason(cancellationReason);
 
             Order updated = orderRepository.save(order);
-
-            whatsAppService.sendOrderCancellation(
-                    user.getPhone(),
-                    order.getTrackingNumber(),
-                    cancellationReason != null ? cancellationReason : "Cancelled by user"
-            );
+            whatsAppService.sendOrderCancellation(user.getPhone(), order.getTrackingNumber(),
+                    cancellationReason != null ? cancellationReason : "Cancelled by user");
 
             return enrichDto(orderMapper.toDto(updated));
         }
@@ -565,19 +447,14 @@ public class OrderService {
             Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
             Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
 
-            // فك التجميد
             walletService.unfreezeAmount(userWallet, order.getDeliveryCost() * 2);
 
-            // إذا كان الطلب في IN_PROGRESS، نفك تجميد السائق كمان
-            if (order.getStatus() == OrderStatus.IN_PROGRESS) {
+            if (order.getStatus() == OrderStatus.IN_PROGRESS)
                 walletService.unfreezeAmount(driverWallet, order.getInsuranceValue());
-            }
 
-            // دفع التعويض (deliveryCost) للسائق
-            if (userWallet.getWalletBalance() < order.getDeliveryCost()) {
+            if (userWallet.getWalletBalance() < order.getDeliveryCost())
                 throw new BusinessException("Insufficient balance to cancel order. Required: " +
                         order.getDeliveryCost() + ", Available: " + userWallet.getWalletBalance());
-            }
 
             userWallet.setWalletBalance(userWallet.getWalletBalance() - order.getDeliveryCost());
             driverWallet.setWalletBalance(driverWallet.getWalletBalance() + order.getDeliveryCost());
@@ -590,11 +467,9 @@ public class OrderService {
 
             Order updated = orderRepository.save(order);
 
-            // إشعار السائق
             userRepository.findById(order.getDriverId())
                     .ifPresent(driver -> whatsAppService.sendOrderCancellation(
-                            driver.getPhone(),
-                            order.getTrackingNumber(),
+                            driver.getPhone(), order.getTrackingNumber(),
                             "User cancelled the order. You received " + order.getDeliveryCost() + " EGP as compensation"
                     ));
 
@@ -605,130 +480,148 @@ public class OrderService {
     }
 
     /**
-     * 10. السائق يحدث الحالة إلى "في الطريق"
-     * Status: IN_PROGRESS → IN_THE_WAY
-     * Authorization: Driver who accepted the order
+     * 10. السائق يحدث "في الطريق"
+     * Authorization: DRIVER role + صاحب الطلب
      */
     public OrderDto updateToInTheWay(Long orderId, UUID driverId) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        // التحقق من أن السائق هو نفسه اللي قبل الطلب
-        if (!order.getDriverId().equals(driverId)) {
+        if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the driver who accepted this order can update status");
-        }
 
-        if (order.getStatus() != OrderStatus.IN_PROGRESS) {
+        if (order.getStatus() != OrderStatus.IN_PROGRESS)
             throw new BusinessException("Order must be in IN_PROGRESS status");
-        }
 
         order.setStatus(OrderStatus.IN_THE_WAY);
-        Order updated = orderRepository.save(order);
-
-        return enrichDto(orderMapper.toDto(updated));
+        return enrichDto(orderMapper.toDto(orderRepository.save(order)));
     }
 
     /**
      * 11. Admin: تغيير حالة الطلب
-     * Authorization: Admin only
+     * Authorization: ADMIN role فقط
      */
-    public OrderDto changeOrderStatus(Long orderId, OrderStatus status) {
+    public OrderDto changeOrderStatus(Long orderId, OrderStatus status, UUID adminId) {
+        User admin = getActiveUser(adminId);
+        requireAdminRole(admin); // ✅
+
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
         order.setStatus(status);
-        Order savedOrder = orderRepository.save(order);
-        return orderMapper.toDto(savedOrder);
+        return orderMapper.toDto(orderRepository.save(order));
     }
 
     // ==================== Query Methods ====================
 
+    /**
+     * Authorization: USER role فقط
+     */
     public List<OrderDto> getUserOrders(UUID userId) {
+        User user = getActiveUser(userId);
+        requireUserRole(user); // ✅
+
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
-                .stream()
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
+                .stream().map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }
 
+    /**
+     * Authorization: DRIVER role فقط
+     */
     public List<OrderDto> getDriverOrders(UUID driverId) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅
+
         return orderRepository.findByDriverIdOrderByCreatedAtDesc(driverId)
-                .stream()
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
+                .stream().map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }
 
-    public List<OrderDto> getAvailableOrders() {
+    /**
+     * Authorization: DRIVER role فقط
+     */
+    public List<OrderDto> getAvailableOrders(UUID driverId) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅
+
         return orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.PENDING)
-                .stream()
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
+                .stream().map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }
 
+    /**
+     * Authorization: USER role فقط
+     */
     public List<OrderDto> getOrdersByUserAndStatus(UUID userId, OrderStatus status) {
+        User user = getActiveUser(userId);
+        requireUserRole(user); // ✅
+
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
-                .stream()
-                .filter(order -> order.getStatus() == status)
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
+                .stream().filter(order -> order.getStatus() == status)
+                .map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }
 
+    // Public - بدون role check
     public DriverDto getOrderByIdAsDriverDto(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         return enrichDriverDto(orderMapper.toDriverDto(order));
     }
 
+    // Public - تتبع بالـ tracking number بدون توكين
     public OrderDto getOrderByTrackingNumber(String trackingNumber) {
         Order order = orderRepository.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with tracking number: " + trackingNumber));
         return enrichDto(orderMapper.toDto(order));
     }
 
+    /**
+     * Authorization: USER role فقط
+     */
     public OrderStatusCounts getOrdersCountsByUser(UUID userId) {
+        User user = getActiveUser(userId);
+        requireUserRole(user); // ✅
+
         List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        long pending = orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count();
-        long accepted = orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count();
+        long pending    = orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count();
+        long accepted   = orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count();
         long inProgress = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count();
-        long inTheWay = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count();
-        long returned = orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count();
-        long delivered = orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count();
-        long allOrders = orders.size();
-        long allActiveOrders = pending + accepted + inProgress + inTheWay;
-        return new OrderStatusCounts(allOrders, allActiveOrders);
+        long inTheWay   = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count();
+        long allOrders  = orders.size();
+        long allActive  = pending + accepted + inProgress + inTheWay;
+        return new OrderStatusCounts(allOrders, allActive);
     }
 
-    public List<OrderDto> getAllOrders() {
+    /**
+     * Authorization: ADMIN role فقط
+     */
+    public List<OrderDto> getAllOrders(UUID adminId) {
+        User admin = getActiveUser(adminId);
+        requireAdminRole(admin); // ✅
+
         return orderRepository.findAll()
-                .stream()
-                .map(orderMapper::toDto)
-                .map(this::enrichDto)
-                .collect(Collectors.toList());
+                .stream().map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }
 
+    /**
+     * Authorization: USER role فقط
+     */
     public OrderStatisticsDto getOrderStatistics(UUID userId) {
-        List<Order> orders = orderRepository.findByUserId(userId);
-        long pending = orders.stream().filter(order -> order.getStatus() == OrderStatus.PENDING).count();
-        long accepted = orders.stream().filter(order -> order.getStatus() == OrderStatus.ACCEPTED).count();
-        long inProgress = orders.stream().filter(order -> order.getStatus() == OrderStatus.IN_PROGRESS).count();
-        long inTheWay = orders.stream().filter(order -> order.getStatus() == OrderStatus.IN_THE_WAY).count();
-        long returned = orders.stream().filter(order -> order.getStatus() == OrderStatus.RETURN).count();
-        long delivered = orders.stream().filter(order -> order.getStatus() == OrderStatus.DELIVERED).count();
-        long cancelled = orders.stream().filter(order -> order.getStatus() == OrderStatus.CANCELLED).count();
+        User user = getActiveUser(userId);
+        requireUserRole(user); // ✅
 
-        OrderStatisticsDto statisticsDto = new OrderStatisticsDto();
-        statisticsDto.setTotalOrders(orders.size());
-        statisticsDto.setPending(pending);
-        statisticsDto.setAccepted(accepted);
-        statisticsDto.setInProgress(inProgress);
-        statisticsDto.setInTheWay(inTheWay);
-        statisticsDto.setInDelivery(returned);
-        statisticsDto.setDelivered(delivered);
-        statisticsDto.setCancelled(cancelled);
-        return statisticsDto;
+        List<Order> orders = orderRepository.findByUserId(userId);
+        OrderStatisticsDto dto = new OrderStatisticsDto();
+        dto.setTotalOrders(orders.size());
+        dto.setPending(orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count());
+        dto.setAccepted(orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count());
+        dto.setInProgress(orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count());
+        dto.setInTheWay(orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count());
+        dto.setInDelivery(orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count());
+        dto.setDelivered(orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count());
+        dto.setCancelled(orders.stream().filter(o -> o.getStatus() == OrderStatus.CANCELLED).count());
+        return dto;
     }
 
     // ==================== Helper Methods ====================
@@ -742,44 +635,29 @@ public class OrderService {
     }
 
     private OrderDto enrichDto(OrderDto orderDto) {
-        if (orderDto.getUserId() != null) {
-            userRepository.findById(orderDto.getUserId()).ifPresent(user ->
-                    orderDto.setUserName(user.getName())
-            );
-        }
-        if (orderDto.getDriverId() != null) {
-            userRepository.findById(orderDto.getDriverId()).ifPresent(driver ->
-                    orderDto.setDriverName(driver.getName())
-            );
-        }
+        if (orderDto.getUserId() != null)
+            userRepository.findById(orderDto.getUserId()).ifPresent(u -> orderDto.setUserName(u.getName()));
+        if (orderDto.getDriverId() != null)
+            userRepository.findById(orderDto.getDriverId()).ifPresent(d -> orderDto.setDriverName(d.getName()));
         return orderDto;
     }
 
-    private CreationDto enrichCreationDto(CreationDto creationDto) {
-        if (creationDto.getUserId() != null) {
-            userRepository.findById(creationDto.getUserId()).ifPresent(user ->
-                    creationDto.setUserName(user.getName())
-            );
-        }
-        if (creationDto.getDriverId() != null) {
-            userRepository.findById(creationDto.getDriverId()).ifPresent(driver ->
-                    creationDto.setDriverName(driver.getName())
-            );
-        }
-        return creationDto;
+    private CreationDto enrichCreationDto(CreationDto dto) {
+        if (dto.getUserId() != null)
+            userRepository.findById(dto.getUserId()).ifPresent(u -> dto.setUserName(u.getName()));
+        if (dto.getDriverId() != null)
+            userRepository.findById(dto.getDriverId()).ifPresent(d -> dto.setDriverName(d.getName()));
+        return dto;
     }
-    private DriverDto enrichDriverDto(DriverDto driverDto) {
-        if (driverDto.getUserId() != null) {
-            userRepository.findById(driverDto.getUserId()).ifPresent(user ->
-                    driverDto.setUserName(user.getName())
-            );
-        }
-        if (driverDto.getDriverId() != null) {
-            userRepository.findById(driverDto.getDriverId()).ifPresent(driver -> {
-                driverDto.setDriverName(driver.getName());
-                driverDto.setDriverPhoto(driver.getProfileImage());
+
+    private DriverDto enrichDriverDto(DriverDto dto) {
+        if (dto.getUserId() != null)
+            userRepository.findById(dto.getUserId()).ifPresent(u -> dto.setUserName(u.getName()));
+        if (dto.getDriverId() != null)
+            userRepository.findById(dto.getDriverId()).ifPresent(d -> {
+                dto.setDriverName(d.getName());
+                dto.setDriverPhoto(d.getProfileImage());
             });
-        }
-        return driverDto;
+        return dto;
     }
 }

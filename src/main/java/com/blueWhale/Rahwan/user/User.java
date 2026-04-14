@@ -5,7 +5,10 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Data
@@ -45,24 +48,37 @@ public class User {
     private boolean active = true;
 
     /**
-     * User Role: USER, DRIVER, or ADMIN
+     * User Roles: مجموعة من الأدوار - يوزر ممكن يكون user وdriver في نفس الوقت
+     * Default: {user}
      */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private UserRole role = UserRole.user;
+    @Column(name = "role")
+    private Set<UserRole> roles = new HashSet<>();
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
     // Helper methods for role checking
     public boolean isUser() {
-        return this.role == UserRole.user;
+        return roles != null && roles.contains(UserRole.user);
     }
 
     public boolean isDriver() {
-        return this.role == UserRole.driver;
+        return roles != null && roles.contains(UserRole.driver);
     }
 
     public boolean isAdmin() {
-        return this.role == UserRole.admin;
+        return roles != null && roles.contains(UserRole.admin);
+    }
+
+    /**
+     * للتوافق مع الكود القديم - يرجع أعلى رول
+     */
+    public UserRole getPrimaryRole() {
+        if (isAdmin()) return UserRole.admin;
+        if (isDriver() && isUser()) return UserRole.driver; // لو الاتنين، driver أولوية
+        if (isDriver()) return UserRole.driver;
+        return UserRole.user;
     }
 }

@@ -20,265 +20,174 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    /**
-     * 1. User: إنشاء طلب جديد
-     * Authorization: Any authenticated user
-     */
-    @PostMapping(
-            value = "/create",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
+    /** 1. User: إنشاء طلب */
+    @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CreationDto> createOrder(
             @AuthenticationPrincipal UserPrincipal principal,
             @ModelAttribute OrderForm orderForm
     ) throws IOException {
-        CreationDto creationDto = orderService.createOrder(orderForm, principal.getId());
-        return ResponseEntity.ok(creationDto);
+        return ResponseEntity.ok(orderService.createOrder(orderForm, principal.getId()));
     }
 
-    /**
-     * 2. User: تأكيد الطلب (تجميد المبلغ)
-     * Authorization: Order owner
-     */
+    /** 2. User: تأكيد الطلب - أضفنا principal */
     @PostMapping("/{orderId}/confirm")
     public ResponseEntity<OrderDto> confirmOrder(
-            @PathVariable Long orderId
-            // ❌ لا نحتاج principal - السيرفس يتحقق من الـ order نفسه
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal  // ✅ أُضيف
     ) {
-        return ResponseEntity.ok(orderService.confirmOrder(orderId));
+        return ResponseEntity.ok(orderService.confirmOrder(orderId, principal.getId()));
     }
 
-    /**
-     * 3. User/Admin: تحديث الطلب
-     * Authorization: Order owner or Admin
-     */
-    @PutMapping(
-            value = "/update/{orderId}",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
+    /** 3. User/Admin: تحديث الطلب */
+    @PutMapping(value = "/update/{orderId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CreationDto> updateOrder(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal,
             @ModelAttribute OrderForm orderForm
     ) throws IOException {
-        CreationDto dto = orderService.updateOrder(orderId, orderForm, principal.getId());
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(orderService.updateOrder(orderId, orderForm, principal.getId()));
     }
 
-    /**
-     * 4. Driver: قبول الطلب
-     * Authorization: Driver only
-     */
+    /** 4. Driver: قبول الطلب */
     @PostMapping("/{orderId}/confirm-by-driver")
     public ResponseEntity<OrderDto> driverConfirmOrder(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(
-                orderService.driverConfirmOrder(orderId, principal.getId())
-        );
+        return ResponseEntity.ok(orderService.driverConfirmOrder(orderId, principal.getId()));
     }
 
-    /**
-     * 5. Driver: تأكيد الاستلام
-     * Authorization: Driver who accepted the order
-     */
+    /** 5. Driver: تأكيد الاستلام */
     @PostMapping("/{orderId}/confirm-pickup")
     public ResponseEntity<OrderDto> confirmPickup(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody OtpRequest otpRequest
     ) {
-        return ResponseEntity.ok(
-                orderService.confirmPickup(orderId, principal.getId(), otpRequest.getOtp())
-        );
+        return ResponseEntity.ok(orderService.confirmPickup(orderId, principal.getId(), otpRequest.getOtp()));
     }
 
-    /**
-     * 6. Driver: تأكيد التسليم
-     * Authorization: Driver who accepted the order
-     */
+    /** 6. Driver: تأكيد التسليم */
     @PostMapping("/{orderId}/confirm-delivery")
     public ResponseEntity<OrderDto> confirmDelivery(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody OtpRequest otpRequest
     ) {
-        return ResponseEntity.ok(
-                orderService.confirmDelivery(orderId, principal.getId(), otpRequest.getOtp())
-        );
+        return ResponseEntity.ok(orderService.confirmDelivery(orderId, principal.getId(), otpRequest.getOtp()));
     }
 
-    /**
-     * 7. Driver: إرجاع الطلب
-     * Authorization: Driver who accepted the order
-     */
+    /** 7. Driver: إرجاع الطلب */
     @PostMapping("/{orderId}/return")
     public ResponseEntity<OrderDto> returnOrder(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(
-                orderService.returnOrder(orderId, principal.getId())
-        );
+        return ResponseEntity.ok(orderService.returnOrder(orderId, principal.getId()));
     }
 
-    /**
-     * 8. Driver: تحديث "في الطريق"
-     * Authorization: Driver who accepted the order
-     */
+    /** 8. Driver: في الطريق */
     @PatchMapping("/{orderId}/in-the-way")
     public ResponseEntity<OrderDto> updateToInTheWay(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(
-                orderService.updateToInTheWay(orderId, principal.getId())
-        );
+        return ResponseEntity.ok(orderService.updateToInTheWay(orderId, principal.getId()));
     }
 
-    /**
-     * 9. Driver: إلغاء الطلب (قبل القبول فقط)
-     * Authorization: Driver
-     */
+    /** 9. Driver: إلغاء الطلب */
     @PostMapping("/{orderId}/cancel-by-driver")
     public ResponseEntity<OrderDto> cancelOrderByDriver(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(
-                orderService.cancelOrderByDriver(orderId, principal.getId())
-        );
+        return ResponseEntity.ok(orderService.cancelOrderByDriver(orderId, principal.getId()));
     }
 
-    /**
-     * 10. User/Admin: إلغاء الطلب
-     * Authorization: Order owner or Admin
-     */
+    /** 10. User/Admin: إلغاء الطلب */
     @PostMapping("/{orderId}/cancel-by-user")
     public ResponseEntity<OrderDto> cancelOrderByUser(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(required = false) String reason
     ) {
-        return ResponseEntity.ok(
-                orderService.cancelOrderByUser(orderId, principal.getId(), reason)
-        );
+        return ResponseEntity.ok(orderService.cancelOrderByUser(orderId, principal.getId(), reason));
     }
 
-    /**
-     * 11. User: جلب طلبات المستخدم
-     * Authorization: Any authenticated user
-     */
+    /** 11. User: طلبات المستخدم */
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<OrderDto>> getUserOrders(
-            @PathVariable UUID userId
-    ) {
+    public ResponseEntity<List<OrderDto>> getUserOrders(@PathVariable UUID userId) {
         return ResponseEntity.ok(orderService.getUserOrders(userId));
     }
 
-    /**
-     * 12. Driver: جلب طلبات السائق
-     * Authorization: Driver
-     */
+    /** 12. Driver: طلبات السائق */
     @GetMapping("/driver")
     public ResponseEntity<List<OrderDto>> getDriverOrders(
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(
-                orderService.getDriverOrders(principal.getId())
-        );
+        return ResponseEntity.ok(orderService.getDriverOrders(principal.getId()));
     }
 
-    /**
-     * 13. جلب الطلبات المتاحة
-     * Authorization: Public (or Driver)
-     */
+    /** 13. Driver: الطلبات المتاحة - أضفنا principal */
     @GetMapping("/available")
-    public ResponseEntity<List<OrderDto>> getAvailableOrders() {
-        return ResponseEntity.ok(orderService.getAvailableOrders());
+    public ResponseEntity<List<OrderDto>> getAvailableOrders(
+            @AuthenticationPrincipal UserPrincipal principal  // ✅ أُضيف
+    ) {
+        return ResponseEntity.ok(orderService.getAvailableOrders(principal.getId()));
     }
 
-    /**
-     * 14. User: جلب طلبات حسب الحالة
-     * Authorization: Any authenticated user
-     */
+    /** 14. User: طلبات حسب الحالة */
     @GetMapping("/status/{status}")
     public ResponseEntity<List<OrderDto>> getOrdersByStatus(
             @PathVariable OrderStatus status,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(
-                orderService.getOrdersByUserAndStatus(principal.getId(), status)
-        );
+        return ResponseEntity.ok(orderService.getOrdersByUserAndStatus(principal.getId(), status));
     }
 
-    /**
-     * 15. جلب تفاصيل طلب
-     * Authorization: Public (or authenticated user)
-     */
+    /** 15. Public: تفاصيل طلب */
     @GetMapping("/{orderId}")
     public ResponseEntity<DriverDto> getOrder(@PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.getOrderByIdAsDriverDto(orderId));
     }
 
-    /**
-     * 16. تتبع طلب (عام – بدون توكين)
-     * Authorization: Public
-     */
+    /** 16. Public: تتبع الطلب */
     @GetMapping("/track/{trackingNumber}")
     public ResponseEntity<OrderDto> trackOrder(@PathVariable String trackingNumber) {
-        return ResponseEntity.ok(
-                orderService.getOrderByTrackingNumber(trackingNumber)
-        );
+        return ResponseEntity.ok(orderService.getOrderByTrackingNumber(trackingNumber));
     }
 
-    /**
-     * 17. User: عدد الطلبات حسب الحالة
-     * Authorization: Any authenticated user
-     */
+    /** 17. User: عدد الطلبات */
     @GetMapping("/countByStatus")
     public ResponseEntity<OrderStatusCounts> getUserOrderCounts(
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(
-                orderService.getOrdersCountsByUser(principal.getId())
-        );
+        return ResponseEntity.ok(orderService.getOrdersCountsByUser(principal.getId()));
     }
 
-    /**
-     * 18. Admin: جلب كل الطلبات
-     * Authorization: Admin only
-     */
+    /** 18. Admin: كل الطلبات - أضفنا principal */
     @GetMapping
-    public ResponseEntity<List<OrderDto>> getAllOrders() {
-        return ResponseEntity.ok(orderService.getAllOrders());
+    public ResponseEntity<List<OrderDto>> getAllOrders(
+            @AuthenticationPrincipal UserPrincipal principal  // ✅ أُضيف
+    ) {
+        return ResponseEntity.ok(orderService.getAllOrders(principal.getId()));
     }
 
-    /**
-     * 19. User: إحصائيات الطلبات
-     * Authorization: Any authenticated user
-     */
+    /** 19. User: إحصائيات */
     @GetMapping("/statistics")
     public ResponseEntity<OrderStatisticsDto> getOrderStatistics(
             @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(
-                orderService.getOrderStatistics(principal.getId())
-        );
+        return ResponseEntity.ok(orderService.getOrderStatistics(principal.getId()));
     }
 
-    /**
-     * 20. Admin: تغيير حالة الطلب
-     * Authorization: Admin only
-     */
+    /** 20. Admin: تغيير حالة الطلب - أضفنا principal */
     @PatchMapping("/{orderId}/status")
     public ResponseEntity<OrderDto> changeOrderStatus(
             @PathVariable Long orderId,
-            @RequestParam OrderStatus status
+            @RequestParam OrderStatus status,
+            @AuthenticationPrincipal UserPrincipal principal  // ✅ أُضيف
     ) {
-        return ResponseEntity.ok(
-                orderService.changeOrderStatus(orderId, status)
-        );
+        return ResponseEntity.ok(orderService.changeOrderStatus(orderId, status, principal.getId()));
     }
 }

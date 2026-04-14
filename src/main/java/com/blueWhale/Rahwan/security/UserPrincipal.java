@@ -9,8 +9,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Data
 @AllArgsConstructor
@@ -20,26 +22,29 @@ public class UserPrincipal implements UserDetails {
     private String name;
     private String phone;
     private String password;
-    private UserRole role;
+    private Set<UserRole> roles;   // ✅ Set بدل role واحدة
     private boolean active;
 
     public static UserPrincipal create(User user) {
+        Set<UserRole> roles = user.getRoles() != null ? user.getRoles() : new HashSet<>();
+        if (roles.isEmpty()) roles.add(UserRole.user); // fallback
+
         return new UserPrincipal(
                 user.getId(),
                 user.getName(),
                 user.getPhone(),
                 user.getPassword(),
-                user.getRole() != null ? user.getRole() : UserRole.user,
+                roles,
                 user.isActive()
         );
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        // إضافة الـ role كـ authority للـ Spring Security
-        return Collections.singletonList(
-                new SimpleGrantedAuthority("ROLE_" + role.name())
-        );
+        // ✅ كل الأدوار بتتحول لـ GrantedAuthority
+        return roles.stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -47,36 +52,13 @@ public class UserPrincipal implements UserDetails {
         return phone;
     }
 
-    @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
+    @Override public boolean isAccountNonExpired()     { return true; }
+    @Override public boolean isAccountNonLocked()      { return true; }
+    @Override public boolean isCredentialsNonExpired() { return true; }
+    @Override public boolean isEnabled()               { return active; }
 
-    @Override
-    public boolean isAccountNonLocked() {
-        return true;
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
-    }
-
-    @Override
-    public boolean isEnabled() {
-        return active;
-    }
-
-    // Helper methods
-    public boolean isUser() {
-        return role == UserRole.user;
-    }
-
-    public boolean isDriver() {
-        return role == UserRole.driver;
-    }
-
-    public boolean isAdmin() {
-        return role == UserRole.admin;
-    }
+    // Helper methods - بيشوف لو الـ Set فيها الدور ده
+    public boolean isUser()   { return roles != null && roles.contains(UserRole.user);   }
+    public boolean isDriver() { return roles != null && roles.contains(UserRole.driver); }
+    public boolean isAdmin()  { return roles != null && roles.contains(UserRole.admin);  }
 }

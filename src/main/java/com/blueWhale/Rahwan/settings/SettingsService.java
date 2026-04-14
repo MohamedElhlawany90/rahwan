@@ -17,7 +17,7 @@ public class SettingsService {
     private void checkAdmin(Authentication authentication) {
         UserPrincipal user = (UserPrincipal) authentication.getPrincipal();
 
-        if (!"admin".equalsIgnoreCase(user.getRole().name())) {
+        if (!user.isAdmin()) {   // ✅ بدل user.getRole().name()
             throw new RuntimeException("Access denied");
         }
     }
@@ -28,7 +28,6 @@ public class SettingsService {
         return mapper.toDto(repository.save(settings));
     }
 
-
     public SettingsDto update(SettingsForm form, Authentication authentication) {
         checkAdmin(authentication);
 
@@ -38,7 +37,6 @@ public class SettingsService {
         mapper.updateEntityFromForm(form, settings);
         return mapper.toDto(repository.save(settings));
     }
-
 
     public SettingsDto getById(String id) {
         return repository.findById(id)
@@ -57,5 +55,4 @@ public class SettingsService {
         checkAdmin(authentication);
         repository.deleteById(id);
     }
-
 }

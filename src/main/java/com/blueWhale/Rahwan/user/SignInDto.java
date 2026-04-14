@@ -3,6 +3,7 @@ package com.blueWhale.Rahwan.user;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 @Data
@@ -14,10 +15,9 @@ public class SignInDto {
     private UUID id;
     private String name;
     private String phone;
-    private String type;
     private String profileImage;
     private boolean active;
-    private UserRole role;
+    private Set<UserRole> roles;        // ✅ Set بدل role واحدة
     private boolean verifiedPhone;
     private LocalDateTime createdAt;
 
@@ -25,5 +25,5 @@ public class SignInDto {
     private double frozenBalance;
     private double totalBalance;
 
-    private String token ;
+    private String token;
 }

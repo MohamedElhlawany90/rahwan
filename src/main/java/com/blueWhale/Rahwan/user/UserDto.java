@@ -1,11 +1,9 @@
-// ============================================
-// UserDto.java (Updated)
-// ============================================
 package com.blueWhale.Rahwan.user;
 
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 @Data
@@ -17,7 +15,7 @@ public class UserDto {
     private UUID id;
     private String name;
     private String phone;
-    private UserRole role;
+    private Set<UserRole> roles;        // ✅ Set بدل role واحدة
     private String profileImage;
     private boolean active;
     private boolean verifiedPhone;
@@ -26,5 +24,4 @@ public class UserDto {
     private double walletBalance;
     private double frozenBalance;
     private double totalBalance;
-
 }

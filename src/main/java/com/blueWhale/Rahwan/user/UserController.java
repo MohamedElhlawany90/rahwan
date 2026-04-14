@@ -1,13 +1,11 @@
 package com.blueWhale.Rahwan.user;
 
-import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
 import com.blueWhale.Rahwan.otp.UserOtpService;
 import com.blueWhale.Rahwan.security.UserPrincipal;
 import com.blueWhale.Rahwan.wallet.WalletDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
@@ -30,27 +28,51 @@ public class UserController {
         this.userOtpService = userOtpService;
     }
 
+    /** تسجيل يوزر جديد */
     @PostMapping("/signup")
     public ResponseEntity<UserDto> createUser(@Valid @RequestBody UserForm form) {
-
-        UserDto dto = userService.createUser(form);
-        return ResponseEntity.status(HttpStatus.CREATED).body(dto);
-
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(form));
     }
 
+    /**
+     * تسجيل من الـ driver app
+     * - لو الرقم موجود: يتحقق من الباسورد ويضيف دور driver
+     * - لو الرقم مش موجود: ينشئ أكونت جديد بدور driver
+     */
+    @PostMapping("/signup-driver")
+    public ResponseEntity<SignInDto> signupAsDriver(@Valid @RequestBody UserForm form) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.signupAsDriver(form));
+    }
+
+    /** تسجيل الدخول (user app و driver app) */
     @PostMapping("/signin")
     public ResponseEntity<SignInDto> signIn(@RequestBody SignInForm form) {
-
         return ResponseEntity.ok(userService.signIn(form.getPhone(), form.getPassword()));
-
     }
 
+    /**
+     * إضافة دور للمستخدم الحالي
+     * القيم المسموح بيها: user, driver فقط — admin محمي في الـ Service
+     * POST /api/users/add-role?role=driver
+     */
+    @PostMapping("/add-role")
+    public ResponseEntity<UserDto> addRole(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam UserRole role
+    ) {
+        return ResponseEntity.ok(userService.addRole(principal.getId(), role));
+    }
+
+    /** Admin: تحديث بيانات مستخدم */
     @PutMapping("/{id}")
-    public ResponseEntity<UserDto> updateUser(@PathVariable UUID id, @Valid @RequestBody UpdateUserForm form) {
+    public ResponseEntity<UserDto> updateUser(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserForm form
+    ) {
         return ResponseEntity.ok(userService.updateUser(id, form));
-
     }
 
+    /** تحديث بروفايل المستخدم */
     @PostMapping(value = "/profile/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<UserDto> updateProfile(
             @PathVariable UUID id,
@@ -65,80 +87,67 @@ public class UserController {
                 .build();
 
         return ResponseEntity.ok(userService.updateProfile(id, form));
-
     }
 
+    /** طلب OTP لتغيير الباسورد */
     @PostMapping("/change-password/request-otp")
     public ResponseEntity<Void> requestChangePasswordOtp(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody ChangePasswordRequest request
     ) {
-        UUID userId =  principal.getId();
-        userService.requestChangePasswordOtp(
-                userId,
-                request.getOldPassword()
-        );
+        userService.requestChangePasswordOtp(principal.getId(), request.getOldPassword());
         return ResponseEntity.ok().build();
     }
 
+    /** تأكيد تغيير الباسورد بـ OTP */
     @PostMapping("/change-password/confirm")
     public ResponseEntity<Void> confirmChangePassword(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody ConfirmChangePasswordRequest request
     ) {
-        UUID userId =  principal.getId();
-
-        userService.confirmChangePassword(
-                userId,
-                request.getOtp(),
-                request.getNewPassword()
-        );
+        userService.confirmChangePassword(principal.getId(), request.getOtp(), request.getNewPassword());
         return ResponseEntity.ok().build();
     }
 
-
+    /** Admin: جلب كل المستخدمين */
     @GetMapping
     public ResponseEntity<List<UserDto>> getAllUsers() {
         return ResponseEntity.ok(userService.getAllUsers());
     }
 
+    /** جلب مستخدم بالـ ID */
     @GetMapping("/{id}")
     public ResponseEntity<UserDto> getUser(@PathVariable UUID id) {
-
         return ResponseEntity.ok(userService.getUserById(id));
-
     }
 
+    /** جلب محفظة المستخدم */
     @GetMapping("/{id}/wallet")
     public ResponseEntity<WalletDto> getUserWallet(@PathVariable UUID id) {
         return ResponseEntity.ok(userService.getUserWallet(id));
-
     }
 
+    /** تعطيل الأكونت (logout) */
     @DeleteMapping("/{id}/logout")
     public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
-
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
-
     }
 
+    /** تفعيل الأكونت */
     @PatchMapping("/{id}/activate")
     public ResponseEntity<UserDto> activateUser(@PathVariable UUID id) {
-
-        UserDto dto = userService.reactivateUser(id);
-        return ResponseEntity.ok(dto);
-
+        return ResponseEntity.ok(userService.reactivateUser(id));
     }
 
+    /** إرسال OTP للتحقق من الرقم */
     @PostMapping("/otp/send")
     public ResponseEntity<Map<String, String>> sendOtpSmsPhone(@RequestParam String phone) {
-        String otp = userOtpService.generateAndSendOtp(phone);
+        userOtpService.generateAndSendOtp(phone);
         return ResponseEntity.ok(Map.of("message", "OTP sent to phone: " + phone));
-
     }
 
-
+    /** التحقق من OTP */
     @PostMapping("/otp/verify")
     public ResponseEntity<Map<String, String>> verifyOtpPhone(
             @RequestParam String phone,
@@ -149,14 +158,10 @@ public class UserController {
         if (verified) {
             return ResponseEntity.ok(Map.of("message", "OTP Verified Successfully"));
         }
-        return ResponseEntity.badRequest()
-                .body(Map.of("message", "Invalid OTP"));
-
+        return ResponseEntity.badRequest().body(Map.of("message", "Invalid OTP"));
     }
 
-    /**
-     * إضافة رصيد للمستخدم - يرجع WalletDto كامل مع التفاصيل
-     */
+    /** Admin: إضافة رصيد للمستخدم */
     @PostMapping("/{userId}/add-balance")
     public ResponseEntity<WalletDto> addUserBalance(
             @PathVariable UUID userId,
@@ -165,8 +170,6 @@ public class UserController {
         if (amount <= 0) {
             return ResponseEntity.badRequest().body(null);
         }
-        WalletDto walletDto = userService.updateUserBalance(userId, amount);
-        return ResponseEntity.ok(walletDto);
-
+        return ResponseEntity.ok(userService.updateUserBalance(userId, amount));
     }
 }

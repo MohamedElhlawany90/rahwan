@@ -200,7 +200,7 @@ public class OrderService {
         order.setAppCommission(appCommission);
         order.setAdditionalNotes(orderForm.getAdditionalNotes());
         order.setCollectionDate(orderForm.getCollectionDate());
-        order.setCollectionTime(orderForm.getCollectionTime());
+        order.setCollectionTime(orderForm.getParsedCollectionTime());
         order.setAnyTime(orderForm.getAnyTime());
         order.setAllowInspection(orderForm.getAllowInspection());
         order.setReceiverPaysShipping(orderForm.getReceiverPaysShipping());

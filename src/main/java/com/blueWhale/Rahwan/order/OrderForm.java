@@ -14,7 +14,7 @@ import java.time.LocalTime;
 @AllArgsConstructor
 public class OrderForm {
 
-    private MultipartFile photo ;
+    private MultipartFile photo;
 
     @NotNull(message = "Pickup latitude is required")
     private double pickupLatitude;
@@ -56,8 +56,17 @@ public class OrderForm {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate collectionDate;
 
-    @Pattern(regexp = "^([01]\\d|2[0-3]):([0-5]\\d)$", message = "Invalid time format")
-    private LocalTime collectionTime;
+    // ✅ FIX: @Pattern only works on String fields, NOT on LocalTime.
+    // Changed to String so the regex validation actually runs.
+    // The service layer is responsible for parsing this to LocalTime via LocalTime.parse().
+    @Pattern(regexp = "^([01]\\d|2[0-3]):([0-5]\\d)$", message = "Invalid time format, expected HH:mm")
+    private String collectionTime;
+
+    // ✅ Helper used by service to get LocalTime safely
+    public LocalTime getParsedCollectionTime() {
+        if (collectionTime == null || collectionTime.isBlank()) return null;
+        return LocalTime.parse(collectionTime);
+    }
 
     @NotNull(message = "Any time flag is required")
     private Boolean anyTime = false;

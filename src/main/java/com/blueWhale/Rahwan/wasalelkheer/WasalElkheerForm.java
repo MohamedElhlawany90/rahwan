@@ -1,6 +1,6 @@
 package com.blueWhale.Rahwan.wasalelkheer;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
@@ -37,10 +37,17 @@ public class WasalElkheerForm {
     @NotNull(message = "Collection date is required")
     private LocalDate collectionDate;
 
-    @NotNull(message = "Collection time is required")
-    @DateTimeFormat(pattern = "HH:mm")
-    @Pattern(regexp = "^([01]\\d|2[0-3]):([0-5]\\d)$", message = "Invalid time format")
+    // ✅ FIX: Was @NotNull on a String, which allows empty strings through validation.
+    // Changed to @NotBlank to properly reject null AND empty/blank values.
+    // @DateTimeFormat has no effect on String fields — removed it to avoid confusion.
+    @NotBlank(message = "Collection time is required")
+    @Pattern(regexp = "^([01]\\d|2[0-3]):([0-5]\\d)$", message = "Invalid time format, expected HH:mm")
     private String collectionTime;
+
+    // ✅ Helper used by service to get LocalTime safely
+    public LocalTime getParsedCollectionTime() {
+        return LocalTime.parse(collectionTime);
+    }
 
     private boolean anyTime = false;
 

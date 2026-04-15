@@ -109,6 +109,26 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/forgot-password/request-otp")
+    public ResponseEntity<Void> forgotPasswordRequestOtp(
+            @RequestBody ForgotPasswordRequest request
+    ) {
+        userService.forgotPasswordRequest(request.getPhone());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/forgot-password/confirm")
+    public ResponseEntity<Void> forgotPasswordConfirm(
+            @RequestBody ForgotPasswordConfirmRequest request
+    ) {
+        userService.forgotPasswordConfirm(
+                request.getPhone(),
+                request.getOtp(),
+                request.getNewPassword()
+        );
+        return ResponseEntity.ok().build();
+    }
+
     /** Admin: جلب كل المستخدمين */
     @GetMapping
     public ResponseEntity<List<UserDto>> getAllUsers() {

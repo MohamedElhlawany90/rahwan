@@ -1,6 +1,6 @@
 package com.blueWhale.Rahwan.location;
 
-public enum LocationType {
+public enum     LocationType {
     PICKUP,
     DROPOFF
 }

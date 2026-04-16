@@ -48,19 +48,34 @@ public class UserService {
     public UserDto createUser(UserForm form) {
         validatePhone(form.getPhone());
 
-        userRepository.findByPhone(form.getPhone())
-                .ifPresent(user -> { throw new RuntimeException("Phone already exists: " + form.getPhone()); });
+        Optional<User> existing = userRepository.findByPhone(form.getPhone());
 
-        User user = userMapper.toEntity(form);
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        if (existing.isPresent()) {
+            // أكونت موجود - نتحقق من الباسورد ونضيف دور user
+            User user = existing.get();
 
-        Set<UserRole> roles = new HashSet<>();
-        roles.add(form.getRole() != null ? form.getRole() : UserRole.user);
-        user.setRoles(roles);
+            if (!passwordEncoder.matches(form.getPassword(), user.getPassword()))
+                throw new RuntimeException("Invalid password");
 
-        User saved = userRepository.save(user);
-        walletService.createWalletForUser(saved);
-        return userMapper.toDto(saved);
+            if (user.getRoles().contains(UserRole.user))
+                throw new RuntimeException("Account already has user role");
+
+            user.getRoles().add(UserRole.user);
+            return userMapper.toDto(userRepository.save(user));
+
+        } else {
+            // أكونت جديد
+            User user = userMapper.toEntity(form);
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
+
+            Set<UserRole> roles = new HashSet<>();
+            roles.add(form.getRole() != null ? form.getRole() : UserRole.user);
+            user.setRoles(roles);
+
+            User saved = userRepository.save(user);
+            walletService.createWalletForUser(saved);
+            return userMapper.toDto(saved);
+        }
     }
 
     public SignInDto signupAsDriver(UserForm form) {

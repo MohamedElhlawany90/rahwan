@@ -29,7 +29,7 @@ public class UserController {
     }
 
     /** تسجيل يوزر جديد */
-    @PostMapping("/signup")
+    @PostMapping("/signup-user")
     public ResponseEntity<UserDto> createUser(@Valid @RequestBody UserForm form) {
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(form));
     }
@@ -40,14 +40,20 @@ public class UserController {
      * - لو الرقم مش موجود: ينشئ أكونت جديد بدور driver
      */
     @PostMapping("/signup-driver")
-    public ResponseEntity<SignInDto> signupAsDriver(@Valid @RequestBody UserForm form) {
+    public ResponseEntity<UserDto> signupAsDriver(@Valid @RequestBody DriverForm form) {
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.signupAsDriver(form));
     }
 
-    /** تسجيل الدخول (user app و driver app) */
-    @PostMapping("/signin")
-    public ResponseEntity<SignInDto> signIn(@RequestBody SignInForm form) {
-        return ResponseEntity.ok(userService.signIn(form.getPhone(), form.getPassword()));
+    /** تسجيل الدخول للمستخدمين فقط (user app) */
+    @PostMapping("/signin/user")
+    public ResponseEntity<SignInDto> signInForUser(@RequestBody SignInForm form) {
+        return ResponseEntity.ok(userService.signInForUser(form.getPhone(), form.getPassword()));
+    }
+
+    /** تسجيل الدخول للسواقين فقط (driver app) */
+    @PostMapping("/signin/driver")
+    public ResponseEntity<SignInDto> signInForDriver(@RequestBody SignInForm form) {
+        return ResponseEntity.ok(userService.signInForDriver(form.getPhone(), form.getPassword()));
     }
 
     /**

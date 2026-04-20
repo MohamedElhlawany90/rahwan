@@ -52,8 +52,10 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/users/signup",
-                                "/api/users/signin",
+                                "/api/users/signup-user",
+                                "/api/users/signup-driver",
+                                "/api/users/signin/user",
+                                "/api/users/signin/driver",
                                 "/api/users/otp/**",
                                 "/api/users/forgot-password/request-otp",
                                 "/api/users/forgot-password/confirm",

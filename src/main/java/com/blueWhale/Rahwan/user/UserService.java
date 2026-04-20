@@ -78,7 +78,7 @@ public class UserService {
         }
     }
 
-    public SignInDto signupAsDriver(UserForm form) {
+    public UserDto signupAsDriver(DriverForm form) {
         validatePhone(form.getPhone());
 
         Optional<User> existing = userRepository.findByPhone(form.getPhone());
@@ -91,27 +91,47 @@ public class UserService {
                 throw new RuntimeException("Account already has driver role");
 
             user.getRoles().add(UserRole.driver);
-            return buildSignInDto(userRepository.save(user));
+            return userMapper.toDto(userRepository.save(user));
         } else {
             User user = userMapper.toEntity(form);
             user.setPassword(passwordEncoder.encode(user.getPassword()));
             user.setRoles(new HashSet<>(Set.of(UserRole.driver)));
             User saved = userRepository.save(user);
             walletService.createWalletForUser(saved);
-            return buildSignInDto(saved);
+            return userMapper.toDto(userRepository.save(user));
         }
     }
 
-    public SignInDto signIn(String phone, String password) {
-        // ✅ FIX: Removed validatePhone() call from signIn.
-        // Phone validation (format check) belongs only at registration time.
-        // If a stored phone somehow didn't match the format, users could never sign in —
-        // a critical lock-out bug. SignIn should only verify credentials, not re-validate format.
+    public SignInDto signInForUser(String phone, String password) {
         User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(password, user.getPassword()))
             throw new RuntimeException("Invalid phone or password");
+
+        if (!user.getRoles().contains(UserRole.user))
+            throw new RuntimeException("Access denied: this sign in is for users only");
+
+        if (!user.isVerifiedPhone())
+            throw new RuntimeException("Phone not verified");
+
+        if (!user.isActive()) {
+            user.setActive(true);
+            userRepository.save(user);
+        }
+
+        return buildSignInDto(user);
+    }
+
+    public SignInDto signInForDriver(String phone, String password) {
+        User user = userRepository.findByPhone(phone)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(password, user.getPassword()))
+            throw new RuntimeException("Invalid phone or password");
+
+        if (!user.getRoles().contains(UserRole.driver))
+            throw new RuntimeException("Access denied: this sign in is for drivers only");
 
         if (!user.isVerifiedPhone())
             throw new RuntimeException("Phone not verified");

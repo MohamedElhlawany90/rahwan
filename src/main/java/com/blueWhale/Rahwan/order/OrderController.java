@@ -167,10 +167,8 @@ public class OrderController {
 
     /** 18. Admin: كل الطلبات - أضفنا principal */
     @GetMapping
-    public ResponseEntity<List<OrderDto>> getAllOrders(
-            @AuthenticationPrincipal UserPrincipal principal  // ✅ أُضيف
-    ) {
-        return ResponseEntity.ok(orderService.getAllOrders(principal.getId()));
+    public ResponseEntity<List<OrderDto>> getAllOrders() {
+        return ResponseEntity.ok(orderService.getAllOrders());
     }
 
     /** 19. User: إحصائيات */

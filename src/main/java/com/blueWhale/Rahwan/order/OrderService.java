@@ -596,9 +596,9 @@ public class OrderService {
     /**
      * Authorization: ADMIN role فقط
      */
-    public List<OrderDto> getAllOrders(UUID adminId) {
-        User admin = getActiveUser(adminId);
-        requireAdminRole(admin); // ✅
+    public List<OrderDto> getAllOrders() {
+//        User user = getActiveUser(userId);
+//        requireAdminRole(user); // ✅
 
         return orderRepository.findAll()
                 .stream().map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());

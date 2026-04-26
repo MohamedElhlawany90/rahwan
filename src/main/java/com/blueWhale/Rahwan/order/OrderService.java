@@ -138,6 +138,7 @@ public class OrderService {
         walletService.freezeAmount(userWallet, order.getDeliveryCost() * 2);
 
         order.setStatus(OrderStatus.PENDING);
+        order.setCreationStatus(CreationStatus.CONFIRMED); // ✅ mark as user-confirmed
         order.setConfirmedAt(LocalDateTime.now());
 
         Order updated = orderRepository.save(order);
@@ -237,6 +238,9 @@ public class OrderService {
 
         if (order.getStatus() != OrderStatus.PENDING)
             throw new BusinessException("Order cannot be accepted in current status");
+
+        if (order.getCreationStatus() != CreationStatus.CONFIRMED) // ✅ must be user-confirmed first
+            throw new BusinessException("Order has not been confirmed by the user yet and cannot be accepted");
 
         if (order.getDriverId() != null)
             throw new BusinessException("Order already accepted by another driver");
@@ -547,7 +551,9 @@ public class OrderService {
         requireDriverRole(driver); // ✅
 
         return orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.PENDING)
-                .stream().map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
+                .stream()
+                .filter(o -> o.getCreationStatus() == CreationStatus.CONFIRMED) // ✅ hide CREATED orders
+                .map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }
 
     /**
@@ -566,6 +572,8 @@ public class OrderService {
     public DriverDto getOrderByIdAsDriverDto(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        if (order.getCreationStatus() == CreationStatus.CREATED) // ✅ hide unconfirmed
+            throw new ResourceNotFoundException("Order not found");
         return enrichDriverDto(orderMapper.toDriverDto(order));
     }
 
@@ -573,6 +581,8 @@ public class OrderService {
     public OrderDto getOrderByTrackingNumber(String trackingNumber) {
         Order order = orderRepository.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with tracking number: " + trackingNumber));
+        if (order.getCreationStatus() == CreationStatus.CREATED) // ✅ hide unconfirmed
+            throw new ResourceNotFoundException("Order not found with tracking number: " + trackingNumber);
         return enrichDto(orderMapper.toDto(order));
     }
 

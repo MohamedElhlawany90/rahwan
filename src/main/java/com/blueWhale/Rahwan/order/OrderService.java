@@ -392,18 +392,23 @@ public class OrderService {
      */
     public OrderDto cancelOrderByDriver(Long orderId, UUID driverId) {
         User driver = getActiveUser(driverId);
-        requireDriverRole(driver); // ✅ موجودة بالفعل
+        requireDriverRole(driver); // ✅
 
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.ACCEPTED)
-            throw new BusinessException("Order cannot be cancelled. Current status: " + order.getStatus());
+        // Only the driver who accepted it can cancel it
+        if (!driverId.equals(order.getDriverId()))
+            throw new BusinessException("You are not the driver assigned to this order");
 
-        Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
-        walletService.unfreezeAmount(userWallet, order.getDeliveryCost() * 2);
+        if (order.getStatus() != OrderStatus.ACCEPTED)
+            throw new BusinessException("Order cannot be cancelled by driver. Current status: " + order.getStatus());
 
-        order.setStatus(OrderStatus.CANCELLED);
+        // ✅ Reset the order so it re-appears for other drivers
+        order.setDriverId(null);                    // detach driver → won't show in getDriverOrders
+        order.setStatus(OrderStatus.PENDING);       // back to available pool → shows in getAvailableOrders
+        order.setConfirmedAt(null);                 // clear driver acceptance timestamp
+
         return enrichDto(orderMapper.toDto(orderRepository.save(order)));
     }
 

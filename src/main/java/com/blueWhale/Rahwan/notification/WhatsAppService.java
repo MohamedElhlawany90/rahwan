@@ -90,6 +90,24 @@ public class WhatsAppService {
 
     // ==================== Order Notifications ====================
 
+    public void sendReturnOrderOtp(String phone, String otp) {
+        String message = """
+                🔑 رمز تأكيد إرجاع الطلب
+                
+                الرمز: %s
+                
+                📦 شارك هذا الرمز مع السائق عند استلام الطلب لإرجاعه.
+                سيتم خصم ضعف ثمن الشحن من محفظتك. 
+                ---
+                🔑 Return Order OTP
+                
+                Code: %s
+                
+                📦 Share this code with the driver when they come to pick up the return order.
+                """.formatted(otp, otp);
+        send(phone, message);
+
+    }
     /**
      * تأكيد إنشاء الطلب للمستخدم
      */

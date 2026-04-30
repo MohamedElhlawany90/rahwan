@@ -77,13 +77,23 @@ public class OrderController {
         return ResponseEntity.ok(orderService.confirmDelivery(orderId, principal.getId(), otpRequest.getOtp()));
     }
 
-    /** 7. Driver: إرجاع الطلب */
+    /** 7-A. Driver: بدء إرجاع الطلب — يُولِّد OTP ويبعته لليوزر */
     @PostMapping("/{orderId}/return")
     public ResponseEntity<OrderDto> returnOrder(
             @PathVariable Long orderId,
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(orderService.returnOrder(orderId, principal.getId()));
+    }
+
+    /** 7-B. Driver: تأكيد الإرجاع بـ OTP — تحويل الأموال */
+    @PostMapping("/{orderId}/confirm-return")
+    public ResponseEntity<OrderDto> confirmReturn(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody OtpRequest otpRequest
+    ) {
+        return ResponseEntity.ok(orderService.confirmReturn(orderId, principal.getId(), otpRequest.getOtp()));
     }
 
     /** 8. Driver: في الطريق */

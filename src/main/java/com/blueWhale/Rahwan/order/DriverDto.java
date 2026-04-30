@@ -64,6 +64,7 @@ public class DriverDto {
     private String otpForDelivery;
     private boolean pickupConfirmed;
     private boolean deliveryConfirmed;
+    private String otpForReturn;
 
     // Timestamps
     private LocalDateTime createdAt;

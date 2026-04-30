@@ -101,6 +101,7 @@ public class Order {
     private String otpForDelivery;
     private boolean pickupConfirmed = false;
     private boolean deliveryConfirmed = false;
+    private String otpForReturn;
 
     // Timestamps
     @Column(nullable = false)

@@ -31,4 +31,6 @@ public class OrderOtpService {
     public String generateDeliveryOtp() {
         return otpService.generateOtp();
     }
+
+    public String generateReturnOtp() {return otpService.generateOtp();}
 }

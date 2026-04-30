@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderService {
 
-    private static final String UPLOADED_FOLDER = "/home/ubuntu/rahwan/";
+    private static final String UPLOADED_FOLDER = "/home/elhlawnay/rahwan/";
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
     private final UserRepository userRepository;
@@ -351,8 +351,8 @@ public class OrderService {
     }
 
     /**
-     * 7. السائق يرجع الطلب
-     * Authorization: DRIVER role + صاحب الطلب
+     * 7-A. السائق يبدأ إرجاع الطلب — يُولِّد OTP ويبعته لليوزر
+     * Authorization: DRIVER role + السائق المسؤول عن الطلب
      */
     public OrderDto returnOrder(Long orderId, UUID driverId) {
         User driver = getActiveUser(driverId);
@@ -367,20 +367,72 @@ public class OrderService {
         if (!order.isPickupConfirmed())
             throw new BusinessException("Cannot return order that wasn't picked up");
 
-        order.setStatus(OrderStatus.RETURN);
-        order.setDeliveredAt(LocalDateTime.now());
+        if (order.getStatus() == OrderStatus.RETURN)
+            throw new BusinessException("Return already initiated for this order");
 
-        Wallet userWallet = walletService.getWalletByUserId(order.getUserId());
+        // توليد OTP الإرجاع وحفظه على الأوردر
+        String returnOtp = otpService.generateReturnOtp();
+        order.setOtpForReturn(returnOtp);
+        order.setStatus(OrderStatus.RETURN);
+
+        Order updated = orderRepository.save(order);
+
+        // إرسال OTP لليوزر صاحب الطلب
+        userRepository.findById(order.getUserId())
+                .ifPresent(user -> whatsAppService.sendReturnOrderOtp(user.getPhone(), returnOtp));
+
+        return enrichDto(orderMapper.toDto(updated));
+    }
+
+    /**
+     * 7-B. السائق يؤكد الإرجاع بـ OTP — تحويل الأموال
+     * Authorization: DRIVER role + السائق المسؤول عن الطلب
+     */
+    public OrderDto confirmReturn(Long orderId, UUID driverId, String returnOtp) {
+        User driver = getActiveUser(driverId);
+        requireDriverRole(driver); // ✅
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (!order.getDriverId().equals(driverId))
+            throw new BusinessException("Only the driver who accepted this order can confirm the return");
+
+        if (order.getStatus() != OrderStatus.RETURN)
+            throw new BusinessException("Order must be in RETURN status to confirm return");
+
+        if (order.getOtpForReturn() == null || !order.getOtpForReturn().equals(returnOtp))
+            throw new BusinessException("Invalid return OTP");
+
+        Wallet userWallet  = walletService.getWalletByUserId(order.getUserId());
         Wallet driverWallet = walletService.getWalletByUserId(order.getDriverId());
 
-        walletService.unfreezeAmount(userWallet, order.getDeliveryCost() * 2);
-        walletService.unfreezeAmount(driverWallet, order.getInsuranceValue());
+        // فك تجميد المبالغ
+        walletService.unfreezeAmount(userWallet,  order.getDeliveryCost() * 2);   // ضعف الشحن من اليوزر
+        walletService.unfreezeAmount(driverWallet, order.getInsuranceValue());     // التأمين من السواق
+
+        // تحويل ضعف تمن الشحن المجمد من محفظة اليوزر للسواق
+        double returnPenalty = order.getDeliveryCost() * 2;
+
+        if (userWallet.getWalletBalance() < returnPenalty)
+            throw new BusinessException("User has insufficient balance to cover return shipping cost");
+
+        userWallet.setWalletBalance(userWallet.getWalletBalance() - returnPenalty);
+        driverWallet.setWalletBalance(driverWallet.getWalletBalance() + returnPenalty);
+
+        walletService.save(userWallet);
+        walletService.save(driverWallet);
+
+        order.setStatus(OrderStatus.RETURN);
+        order.setDeliveredAt(LocalDateTime.now());
+        order.setOtpForReturn(returnOtp);
 
         Order updated = orderRepository.save(order);
 
         userRepository.findById(order.getUserId())
                 .ifPresent(user -> whatsAppService.sendOrderCancellation(
-                        user.getPhone(), order.getTrackingNumber(), "Order returned to sender"
+                        user.getPhone(), order.getTrackingNumber(),
+                        "تم إرجاع الطلب وتحويل تكلفة الشحن المضاعفة للسائق"
                 ));
 
         return enrichDto(orderMapper.toDto(updated));

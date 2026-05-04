@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderService {
 
-    private static final String UPLOADED_FOLDER = "/home/elhlawnay/rahwan/";
+    private static final String UPLOADED_FOLDER = "/home/ubunto/rahwan/";
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
     private final UserRepository userRepository;
@@ -95,6 +95,15 @@ public class OrderService {
         order.setTrackingNumber(generateTrackingNumber());
         order.setCreationStatus(CreationStatus.CREATED);
         order.setStatus(OrderStatus.PENDING);
+
+        // Require user to have sufficient wallet balance before creating an order
+        // (The app later freezes twice the delivery cost on confirmation, so ensure user
+        // has at least that much now to prevent creating orders without funds.)
+        Wallet userWallet = walletService.getWalletByUserId(userId);
+        double requiredBalance = totalCost * 2;
+        if (userWallet == null || userWallet.getWalletBalance() < requiredBalance) {
+            throw new BusinessException("You don't have enough balance. Please top up at least " + requiredBalance + " EGP to create an order");
+        }
 
         Path uploadDir = Paths.get(UPLOADED_FOLDER);
         if (orderForm.getPhoto() != null) {
@@ -664,11 +673,13 @@ public class OrderService {
      * Authorization: ADMIN role فقط
      */
     public List<OrderDto> getAllOrders() {
-//        User user = getActiveUser(userId);
-//        requireAdminRole(user); // ✅
-
+        // Only return orders that were confirmed by the user (hide CREATED/unconfirmed orders)
         return orderRepository.findAll()
-                .stream().map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
+                .stream()
+                .filter(o -> o.getCreationStatus() == CreationStatus.CONFIRMED)
+                .map(orderMapper::toDto)
+                .map(this::enrichDto)
+                .collect(Collectors.toList());
     }
 
     /**

@@ -57,7 +57,7 @@ public class WalletService {
         Wallet toWallet = getWalletByUserId(toUserId);
 
         if (fromWallet.getWalletBalance() < amount) {
-            throw new RuntimeException("Insufficient balance. Available: " +
+            throw new RuntimeException("You don't have enough balance: " +
                     fromWallet.getWalletBalance() + ", Required: " + amount);
         }
 
@@ -71,7 +71,7 @@ public class WalletService {
     public void checkHasEnoughBalance(UUID userId, double amount) {
         Wallet wallet = getWalletByUserId(userId);
         if (wallet.getWalletBalance() < amount) {
-            throw new RuntimeException("Insufficient balance. Available: " +
+            throw new RuntimeException("You don't have enough balance: " +
                     wallet.getWalletBalance() + ", Required: " + amount);
         }
     }
@@ -80,7 +80,7 @@ public class WalletService {
 
     public void freezeAmount(Wallet wallet, double amount) {
         if (wallet.getWalletBalance() < amount) {
-            throw new RuntimeException("Insufficient balance. Available: " +
+            throw new RuntimeException("You don't have enough balance: " +
                     wallet.getWalletBalance() + ", Required: " + amount);
         }
         wallet.setWalletBalance(wallet.getWalletBalance() - amount);
@@ -96,7 +96,7 @@ public class WalletService {
 
     public void unfreezeAmount(Wallet wallet, double amount) {
         if (wallet.getFrozenBalance() < amount) {
-            throw new RuntimeException("Insufficient frozen balance. Available: " +
+            throw new RuntimeException("You don't have enough balance: " +
                     wallet.getFrozenBalance() + ", Required: " + amount);
         }
         wallet.setFrozenBalance(wallet.getFrozenBalance() - amount);

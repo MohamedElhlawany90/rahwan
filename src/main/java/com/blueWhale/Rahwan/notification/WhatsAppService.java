@@ -204,6 +204,17 @@ public class WhatsAppService {
         send(phone, message);
     }
 
+    public void sendDriverCancellation(String phone, String trackingNumber) {
+        String message = """
+                قام السائق بالغاء طلبك 
+                
+                سيتم اخد الطلب عبر سائق اخر الان
+                """.formatted(trackingNumber);
+
+        send(phone, message);
+
+    }
+
     /**
      * إشعار إلغاء الطلب
      */

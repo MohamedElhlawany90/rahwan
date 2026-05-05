@@ -96,15 +96,6 @@ public class OrderController {
         return ResponseEntity.ok(orderService.confirmReturn(orderId, principal.getId(), otpRequest.getOtp()));
     }
 
-    /** 8. Driver: في الطريق */
-    @PatchMapping("/{orderId}/in-the-way")
-    public ResponseEntity<OrderDto> updateToInTheWay(
-            @PathVariable Long orderId,
-            @AuthenticationPrincipal UserPrincipal principal
-    ) {
-        return ResponseEntity.ok(orderService.updateToInTheWay(orderId, principal.getId()));
-    }
-
     /** 9. Driver: إلغاء الطلب */
     @PostMapping("/{orderId}/cancel-by-driver")
     public ResponseEntity<OrderDto> cancelOrderByDriver(

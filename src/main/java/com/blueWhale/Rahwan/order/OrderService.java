@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderService {
 
-    private static final String UPLOADED_FOLDER = "/home/ubuntu/rahwan/";
+    private static final String UPLOADED_FOLDER = "/home/elhlawnay/rahwan/";
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
     private final UserRepository userRepository;
@@ -326,8 +326,8 @@ public class OrderService {
         if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the driver who accepted this order can confirm delivery");
 
-        if (order.getStatus() != OrderStatus.IN_PROGRESS && order.getStatus() != OrderStatus.IN_THE_WAY)
-            throw new BusinessException("Order must be IN_PROGRESS or IN_THE_WAY");
+        if (order.getStatus() != OrderStatus.IN_PROGRESS)
+            throw new BusinessException("Order must be IN_PROGRESS");
 
         if (!otp.equals(order.getOtpForDelivery()))
             throw new BusinessException("Invalid delivery OTP");
@@ -491,6 +491,10 @@ public class OrderService {
         order.setStatus(OrderStatus.PENDING);       // back to available pool → shows in getAvailableOrders
         order.setConfirmedAt(null);                 // clear driver acceptance timestamp
 
+        userRepository.findById(order.getUserId())
+                .ifPresent(user -> whatsAppService
+                        .sendDriverCancellation(user.getPhone(), order.getTrackingNumber()));
+
         return enrichDto(orderMapper.toDto(orderRepository.save(order)));
     }
 
@@ -577,27 +581,6 @@ public class OrderService {
         }
 
         throw new BusinessException("Unable to cancel order in current state");
-    }
-
-    /**
-     * 10. السائق يحدث "في الطريق"
-     * Authorization: DRIVER role + صاحب الطلب
-     */
-    public OrderDto updateToInTheWay(Long orderId, UUID driverId) {
-        User driver = getActiveUser(driverId);
-        requireDriverRole(driver); // ✅
-
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-
-        if (!order.getDriverId().equals(driverId))
-            throw new BusinessException("Only the driver who accepted this order can update status");
-
-        if (order.getStatus() != OrderStatus.IN_PROGRESS)
-            throw new BusinessException("Order must be in IN_PROGRESS status");
-
-        order.setStatus(OrderStatus.IN_THE_WAY);
-        return enrichDto(orderMapper.toDto(orderRepository.save(order)));
     }
 
     /**
@@ -693,9 +676,8 @@ public class OrderService {
         long pending    = orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count();
         long accepted   = orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count();
         long inProgress = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count();
-        long inTheWay   = orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count();
         long allOrders  = orders.size();
-        long allActive  = pending + accepted + inProgress + inTheWay;
+        long allActive  = pending + accepted + inProgress ;
         return new OrderStatusCounts(allOrders, allActive);
     }
 
@@ -725,7 +707,6 @@ public class OrderService {
         dto.setPending(orders.stream().filter(o -> o.getStatus() == OrderStatus.PENDING).count());
         dto.setAccepted(orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count());
         dto.setInProgress(orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count());
-        dto.setInTheWay(orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count());
         dto.setInDelivery(orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURNED).count());
         dto.setDelivered(orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count());
         dto.setCancelled(orders.stream().filter(o -> o.getStatus() == OrderStatus.CANCELLED).count());

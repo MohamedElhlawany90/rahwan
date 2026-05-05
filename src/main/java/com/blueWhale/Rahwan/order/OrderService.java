@@ -12,6 +12,7 @@ import com.blueWhale.Rahwan.user.User;
 import com.blueWhale.Rahwan.user.UserRepository;
 import com.blueWhale.Rahwan.util.ImageUtility;
 import com.blueWhale.Rahwan.wallet.Wallet;
+import com.blueWhale.Rahwan.transaction.TransactionService;
 import com.blueWhale.Rahwan.wallet.WalletService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,7 +32,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderService {
 
-    private static final String UPLOADED_FOLDER = "/home/ubunto/rahwan/";
+    private static final String UPLOADED_FOLDER = "/home/ubuntu/rahwan/";
     private final OrderRepository orderRepository;
     private final OrderMapper orderMapper;
     private final UserRepository userRepository;
@@ -40,6 +41,7 @@ public class OrderService {
     private final OrderOtpService otpService;
     private final WhatsAppService whatsAppService;
     private final CommissionSettingsService commissionSettingsService;
+    private final TransactionService transactionService;
 
     // ==================== Helper: Role Checks ====================
 
@@ -351,6 +353,16 @@ public class OrderService {
         walletService.save(userWallet);
         walletService.save(driverWallet);
 
+        // ✅ Log the real money transfer for wallet history
+        transactionService.logDeliveryCompleted(
+                order.getId(),
+                order.getTrackingNumber(),
+                order.getDriverId(),          // from: driver
+                order.getUserId(),            // to:   user (sender)
+                userReceives,                 // net amount credited to user
+                order.getAppCommission()      // platform commission
+        );
+
         Order updated = orderRepository.save(order);
 
         userRepository.findById(order.getUserId())
@@ -376,13 +388,13 @@ public class OrderService {
         if (!order.isPickupConfirmed())
             throw new BusinessException("Cannot return order that wasn't picked up");
 
-        if (order.getStatus() == OrderStatus.RETURN)
+        if (order.getStatus() == OrderStatus.IN_RETURN)
             throw new BusinessException("Return already initiated for this order");
 
         // توليد OTP الإرجاع وحفظه على الأوردر
         String returnOtp = otpService.generateReturnOtp();
         order.setOtpForReturn(returnOtp);
-        order.setStatus(OrderStatus.RETURN);
+        order.setStatus(OrderStatus.IN_RETURN);
 
         Order updated = orderRepository.save(order);
 
@@ -407,7 +419,7 @@ public class OrderService {
         if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the driver who accepted this order can confirm the return");
 
-        if (order.getStatus() != OrderStatus.RETURN)
+        if (order.getStatus() != OrderStatus.IN_RETURN)
             throw new BusinessException("Order must be in RETURN status to confirm return");
 
         if (order.getOtpForReturn() == null || !order.getOtpForReturn().equals(returnOtp))
@@ -432,7 +444,16 @@ public class OrderService {
         walletService.save(userWallet);
         walletService.save(driverWallet);
 
-        order.setStatus(OrderStatus.RETURN);
+        // ✅ Log the real money transfer for wallet history
+        transactionService.logReturnPenalty(
+                order.getId(),
+                order.getTrackingNumber(),
+                order.getUserId(),            // from: user (sender pays penalty)
+                order.getDriverId(),          // to:   driver
+                returnPenalty
+        );
+
+        order.setStatus(OrderStatus.RETURNED);
         order.setDeliveredAt(LocalDateTime.now());
         order.setOtpForReturn(returnOtp);
 
@@ -489,7 +510,7 @@ public class OrderService {
         if (!order.getUserId().equals(userId) && !user.isAdmin())
             throw new BusinessException("You are not authorized to cancel this order");
 
-        if (order.getStatus() == OrderStatus.DELIVERED || order.getStatus() == OrderStatus.RETURN)
+        if (order.getStatus() == OrderStatus.DELIVERED || order.getStatus() == OrderStatus.IN_RETURN)
             throw new BusinessException("Order cannot be cancelled at this stage: " + order.getStatus());
 
         if (order.getStatus() == OrderStatus.CANCELLED)
@@ -531,6 +552,15 @@ public class OrderService {
 
             walletService.save(userWallet);
             walletService.save(driverWallet);
+
+            // ✅ Log the real money transfer for wallet history
+            transactionService.logCancellationCompensation(
+                    order.getId(),
+                    order.getTrackingNumber(),
+                    order.getUserId(),            // from: user (sender pays compensation)
+                    order.getDriverId(),          // to:   driver
+                    order.getDeliveryCost()
+            );
 
             order.setStatus(OrderStatus.CANCELLED);
             order.setRejectionReason(cancellationReason != null ? cancellationReason : "Cancelled by user after driver acceptance");
@@ -696,7 +726,7 @@ public class OrderService {
         dto.setAccepted(orders.stream().filter(o -> o.getStatus() == OrderStatus.ACCEPTED).count());
         dto.setInProgress(orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_PROGRESS).count());
         dto.setInTheWay(orders.stream().filter(o -> o.getStatus() == OrderStatus.IN_THE_WAY).count());
-        dto.setInDelivery(orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURN).count());
+        dto.setInDelivery(orders.stream().filter(o -> o.getStatus() == OrderStatus.RETURNED).count());
         dto.setDelivered(orders.stream().filter(o -> o.getStatus() == OrderStatus.DELIVERED).count());
         dto.setCancelled(orders.stream().filter(o -> o.getStatus() == OrderStatus.CANCELLED).count());
         return dto;

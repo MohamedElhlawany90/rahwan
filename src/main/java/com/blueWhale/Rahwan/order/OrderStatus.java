@@ -5,7 +5,8 @@ public enum OrderStatus {
     ACCEPTED,       // تم قبول الطلب من السائق
     IN_PROGRESS,    // جاري التنفيذ (السائق في الطريق للاستلام)
     IN_THE_WAY,     // في الطريق للتسليم
-    RETURN,         // تم الإرجاع
+    IN_RETURN,         // فى الطريق للارجاع
+    RETURNED,        // تم الارجاع
     DELIVERED,       // تم التسليم
     CANCELLED       // تم إلغاء الطلب
 }

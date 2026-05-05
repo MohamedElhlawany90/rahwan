@@ -244,7 +244,7 @@ public class OrderService {
         User driver = getActiveUser(driverId);
         requireDriverRole(driver); // ✅ موجودة بالفعل
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
         if (order.getStatus() != OrderStatus.PENDING)

@@ -1,6 +1,8 @@
 package com.blueWhale.Rahwan.order;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,9 +17,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByTrackingNumber(String trackingNumber);
     List<Order> findByDriverIdOrderByCreatedAtDesc(UUID driverId);
     List<Order> findByUserId(UUID userId);
-//    List<Order> findByUserIdAndStatusNotOrderByCreatedAtDesc(UUID userId, OrderStatus status);
-//    List<Order> findByDriverIdAndStatusNotOrderByCreatedAtDesc(UUID driverId, OrderStatus status);
-//    List<Order> findByUserIdAndStatusOrderByCreatedAtDesc(UUID userId, OrderStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :id")
+    Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
     @Query("""
         SELECT o

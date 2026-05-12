@@ -26,7 +26,7 @@ public class StorageService {
      * Saves a multipart file to the configured upload directory.
      * @return the saved filename (stored in the DB as a reference)
      */
-    public String save(MultipartFile file) throws IOException {
+    public String savePhoto(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) return null;
 
         Path dir = Paths.get(uploadDir);

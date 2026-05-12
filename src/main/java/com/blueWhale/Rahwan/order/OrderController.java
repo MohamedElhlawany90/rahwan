@@ -168,8 +168,13 @@ public class OrderController {
 
     /** 18. Admin: كل الطلبات - أضفنا principal */
     @GetMapping
-    public ResponseEntity<List<OrderDto>> getAllOrders() {
-        return ResponseEntity.ok(orderService.getAllOrders());
+    public ResponseEntity<List<OrderDto>> getAllOrders(UUID adminId) {
+        return ResponseEntity.ok(orderService.getAllOrders(adminId));
+    }
+
+    @GetMapping("user")
+    public ResponseEntity<List<OrderDto>> getAllOrdersForUser(UUID userId) {
+        return ResponseEntity.ok(orderService.getAllOrdersForUser(userId));
     }
 
     /** 19. User: إحصائيات */

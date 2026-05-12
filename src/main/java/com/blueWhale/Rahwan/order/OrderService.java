@@ -107,7 +107,7 @@ public class OrderService {
         order.setTrackingNumber(generateTrackingNumber());
         order.setCreationStatus(CreationStatus.CREATED);
         order.setStatus(OrderStatus.PENDING);
-        order.setPhoto(storageService.save(form.getPhoto())); // ✅ delegated
+        order.setPhoto(storageService.savePhoto(form.getPhoto())); // ✅ delegated
 
         return enrichCreationDto(orderMapper.toCreationDto(orderRepository.save(order)));
     }
@@ -193,7 +193,7 @@ public class OrderService {
         order.setAllowInspection(form.getAllowInspection());
         order.setReceiverPaysShipping(form.getReceiverPaysShipping());
 
-        String newPhoto = storageService.save(form.getPhoto());
+        String newPhoto = storageService.savePhoto(form.getPhoto());
         if (newPhoto != null) order.setPhoto(newPhoto);
 
         return enrichCreationDto(orderMapper.toCreationDto(orderRepository.save(order)));
@@ -466,8 +466,18 @@ public class OrderService {
         return new OrderStatusCounts(orders.size(), active);
     }
 
-    public List<OrderDto> getAllOrders() {
+    // Admin-only: return all confirmed orders in the system
+    public List<OrderDto> getAllOrders(UUID adminId) {
+        requireAdmin(getActiveUser(adminId));
         return orderRepository.findAll().stream()
+                .filter(o -> o.getCreationStatus() == CreationStatus.CONFIRMED)
+                .map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
+    }
+
+    // For current user: return their confirmed orders only
+    public List<OrderDto> getAllOrdersForUser(UUID userId) {
+        requireUser(getActiveUser(userId));
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .filter(o -> o.getCreationStatus() == CreationStatus.CONFIRMED)
                 .map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }

@@ -1,5 +1,7 @@
 package com.blueWhale.Rahwan.order;
 
+import com.blueWhale.Rahwan.charity.Charity;
+import com.blueWhale.Rahwan.charity.CharityRepository;
 import com.blueWhale.Rahwan.commission.CommissionSettings;
 import com.blueWhale.Rahwan.commission.CommissionSettingsService;
 import com.blueWhale.Rahwan.exception.BusinessException;
@@ -25,34 +27,39 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * OrderService is now a pure orchestrator.
- * It does NOT contain:
- *   - File I/O  → delegated to StorageService
- *   - Money ops → delegated to OrderFinanceService
- *   - WhatsApp  → published as events, handled by OrderNotificationListener
- *   - Math      → delegated to OrderFinanceService
+ * Unified service for ALL order types.
  *
- * It ONLY:
- *   1. Validates business rules
- *   2. Changes Order state
- *   3. Saves to DB
- *   4. Delegates side effects
+ * OrderCategory.REGULAR — standard paid delivery
+ *   • User wallet is frozen 2× at confirmation
+ *   • Driver insurance is frozen at pickup
+ *   • On delivery: user pays, driver earns net (deliمveryCost − appCommission)
+ *   • On return:   user pays 2× penalty to driver
+ *   • On cancel (after driver): user pays 1× penalty to driver
+ *
+ * OrderCategory.CHARITY — WasalElkheer donation delivery
+ *   • No wallet freeze on user (items donated, not money)
+ *   • No insurance freeze on driver
+ *   • On delivery: app credits driver full deliveryCost (no commission split)
+ *   • No return flow — charity location is always known
+ *   • On driver cancel: order returns to PENDING so another driver can take it
+ *   • On user cancel (after driver): no financial penalty
  */
 @Service
 @Transactional
 @RequiredArgsConstructor
 public class OrderService {
 
-    private final OrderRepository          orderRepository;
-    private final OrderMapper              orderMapper;
-    private final UserRepository           userRepository;
-    private final CostCalculationService   costCalculationService;
-    private final CommissionSettingsService commissionSettingsService;
-    private final WalletService            walletService;
-    private final OrderOtpService          otpService;
-    private final StorageService           storageService;       // ✅ replaces inline file code
-    private final OrderFinanceService      financeService;       // ✅ replaces inline wallet code
-    private final ApplicationEventPublisher eventPublisher;      // ✅ replaces inline WhatsApp calls
+    private final OrderRepository            orderRepository;
+    private final OrderMapper                orderMapper;
+    private final UserRepository             userRepository;
+    private final CharityRepository          charityRepository;
+    private final CostCalculationService     costCalculationService;
+    private final CommissionSettingsService  commissionSettingsService;
+    private final WalletService              walletService;
+    private final OrderOtpService            otpService;
+    private final StorageService             storageService;
+    private final OrderFinanceService        financeService;
+    private final ApplicationEventPublisher  eventPublisher;
 
     // ═══════════════════════════════════════════════════════════════════════
     //  Role Guards
@@ -70,7 +77,7 @@ public class OrderService {
     private void requireAdmin(User u)  { if (!u.isAdmin())  throw new BusinessException("Admins only");  }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  1. Create Order
+    //  1. Create — REGULAR
     // ═══════════════════════════════════════════════════════════════════════
 
     public CreationDto createOrder(OrderForm form, UUID userId) throws IOException {
@@ -85,37 +92,106 @@ public class OrderService {
         CommissionSettings commission = commissionSettingsService.getActiveSettings();
         double deliveryCost   = cost.getTotalCost();
         double commissionRate = commission.getCommissionRate();
-
-        // ✅ FIX 1: Commission calculated on deliveryCost, not insuranceValue
         double appCommission  = financeService.calculateCommission(deliveryCost, commissionRate);
-        // ✅ FIX 2: Driver earnings persisted immediately on the order
         double driverEarnings = financeService.calculateDriverEarnings(deliveryCost, appCommission);
 
-        // Balance pre-check before order is even created
         Wallet userWallet = walletService.getWalletByUserId(userId);
         double required = financeService.calculateFreezeAmount(deliveryCost);
         if (userWallet.getWalletBalance() < required)
             throw new BusinessException("Insufficient balance. Need at least " + required + " EGP.");
 
         Order order = orderMapper.toEntity(form);
+        order.setOrderCategory(OrderCategory.REGULAR);
         order.setUserId(userId);
         order.setDeliveryCost(deliveryCost);
         order.setDistanceKm(cost.getDistanceKm());
         order.setCommissionRate(commissionRate);
         order.setAppCommission(appCommission);
-        order.setDriverEarnings(driverEarnings);          // ✅ FIX 2 applied
+        order.setDriverEarnings(driverEarnings);
         order.setTrackingNumber(generateTrackingNumber());
         order.setCreationStatus(CreationStatus.CREATED);
         order.setStatus(OrderStatus.PENDING);
-        order.setPhoto(storageService.savePhoto(form.getPhoto())); // ✅ delegated
+        order.setPhoto(storageService.savePhoto(form.getPhoto()));
 
         return enrichCreationDto(orderMapper.toCreationDto(orderRepository.save(order)));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  2. Confirm Order  (freeze wallet)
+    //  1-B. Create — CHARITY (WasalElkheer)
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * Creates a charity donation order.
+     *
+     * Differences from REGULAR:
+     *  - Destination is a known Charity — coordinates fetched from CharityRepository.
+     *  - No wallet balance pre-check — user donates items, not money.
+     *  - No commission — app pays driver in full on delivery.
+     *  - Uses pickupLatitude/pickupLongitude for the donor's location (reuses the
+     *    same Order fields, avoiding a separate table).
+     */
+    public CreationDto createCharityOrder(CharityOrderForm form, UUID userId) throws IOException {
+        User user = getActiveUser(userId);
+        requireUser(user);
+
+        Charity charity = charityRepository.findById(form.getCharityId())
+                .orElseThrow(() -> new ResourceNotFoundException("Charity not found: " + form.getCharityId()));
+        if (!charity.isActive()) throw new BusinessException("Charity is not active");
+
+        // Distance: donor location → charity location
+        PricingDetails cost = costCalculationService.calculateCost(
+                form.getUserLatitude(), form.getUserLongitude(),
+                charity.getLatitude(), charity.getLongitude(),
+                null);
+
+        Order order = new Order();
+        order.setOrderCategory(OrderCategory.CHARITY);
+        order.setUserId(userId);
+        order.setCharityId(form.getCharityId());
+
+        // Donor location stored in pickup fields for consistency
+        order.setPickupLatitude(form.getUserLatitude());
+        order.setPickupLongitude(form.getUserLongitude());
+        order.setPickupAddress(form.getAddress());
+
+        // Charity location stored in recipient fields
+        order.setRecipientLatitude(charity.getLatitude());
+        order.setRecipientLongitude(charity.getLongitude());
+        order.setRecipientAddress(charity.getNameEn());
+        order.setRecipientName(charity.getNameEn());
+        order.setRecipientPhone(charity.getPhone());
+
+        order.setOrderType(form.getOrderType());
+        order.setAdditionalNotes(form.getAdditionalNotes());
+        order.setCollectionDate(form.getCollectionDate());
+        order.setAnyTime(form.isAnyTime());
+        order.setAllowInspection(form.isAllowInspection());
+        order.setReceiverPaysShipping(false); // app always pays for charity orders
+
+        order.setDeliveryCost(cost.getTotalCost());
+        order.setDistanceKm(cost.getDistanceKm());
+
+        // Commission fields stay 0.0 — no app commission on donations
+        order.setCommissionRate(0.0);
+        order.setAppCommission(0.0);
+        order.setDriverEarnings(cost.getTotalCost()); // driver earns full amount
+
+        order.setTrackingNumber(generateTrackingNumber());
+        order.setCreationStatus(CreationStatus.CREATED);
+        order.setStatus(OrderStatus.PENDING);
+        order.setPhoto(storageService.savePhoto(form.getPhoto()));
+
+        return enrichCreationDto(orderMapper.toCreationDto(orderRepository.save(order)));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  2. Confirm Order
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * REGULAR: freezes user wallet (2× deliveryCost).
+     * CHARITY: no freeze — user donates items, not money.
+     */
     public OrderDto confirmOrder(Long orderId, UUID userId) {
         User user = getActiveUser(userId);
         requireUser(user);
@@ -133,10 +209,13 @@ public class OrderService {
         order.setCreationStatus(CreationStatus.CONFIRMED);
         order.setConfirmedAt(LocalDateTime.now());
 
-        financeService.freezeForOrder(userId, order.getDeliveryCost()); // ✅ delegated
-        Order saved = orderRepository.save(order);
+        if (order.getOrderCategory() == OrderCategory.REGULAR) {
+            financeService.freezeForOrder(userId, order.getDeliveryCost());
+        }
+        // CHARITY: no freeze
 
-        publish(saved, OrderNotificationEvent.Type.ORDER_CONFIRMED, null, pickupOtp); // ✅ event
+        Order saved = orderRepository.save(order);
+        publish(saved, OrderNotificationEvent.Type.ORDER_CONFIRMED, null, pickupOtp);
         return enrichDto(orderMapper.toDto(saved));
     }
 
@@ -144,6 +223,10 @@ public class OrderService {
     //  3. Update Order
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * REGULAR: recalculates cost and swaps the frozen wallet amount.
+     * CHARITY: recalculates cost (user→charity) but no wallet operation.
+     */
     public CreationDto updateOrder(Long orderId, OrderForm form, UUID userId) throws IOException {
         User actor = getActiveUser(userId);
         if (!actor.isUser() && !actor.isAdmin())
@@ -156,21 +239,24 @@ public class OrderService {
         if (order.getStatus() != OrderStatus.PENDING)
             throw new BusinessException("Order cannot be updated in current status");
 
+        // CHARITY update uses a separate form path
+        if (order.getOrderCategory() == OrderCategory.CHARITY)
+            throw new BusinessException(
+                    "Use updateCharityOrder() to update a charity order");
+
         PricingDetails cost = costCalculationService.calculateCost(
                 form.getPickupLatitude(), form.getPickupLongitude(),
                 form.getRecipientLatitude(), form.getRecipientLongitude(),
                 form.getInsuranceValue());
 
         CommissionSettings commission = commissionSettingsService.getActiveSettings();
-        double newDeliveryCost  = cost.getTotalCost();
-        double commissionRate   = commission.getCommissionRate();
-        double appCommission    = financeService.calculateCommission(newDeliveryCost, commissionRate);
-        double driverEarnings   = financeService.calculateDriverEarnings(newDeliveryCost, appCommission);
+        double newDeliveryCost = cost.getTotalCost();
+        double commissionRate  = commission.getCommissionRate();
+        double appCommission   = financeService.calculateCommission(newDeliveryCost, commissionRate);
+        double driverEarnings  = financeService.calculateDriverEarnings(newDeliveryCost, appCommission);
 
-        // Swap frozen amount
         financeService.refreezeForOrder(order.getUserId(), order.getDeliveryCost(), newDeliveryCost);
 
-        // Update all fields
         order.setPickupLatitude(form.getPickupLatitude());
         order.setPickupLongitude(form.getPickupLongitude());
         order.setPickupAddress(form.getPickupAddress());
@@ -185,7 +271,7 @@ public class OrderService {
         order.setDistanceKm(cost.getDistanceKm());
         order.setCommissionRate(commissionRate);
         order.setAppCommission(appCommission);
-        order.setDriverEarnings(driverEarnings);              // ✅ FIX 2 applied
+        order.setDriverEarnings(driverEarnings);
         order.setAdditionalNotes(form.getAdditionalNotes());
         order.setCollectionDate(form.getCollectionDate());
         order.setCollectionTime(form.getCollectionTime());
@@ -199,10 +285,65 @@ public class OrderService {
         return enrichCreationDto(orderMapper.toCreationDto(orderRepository.save(order)));
     }
 
+    /**
+     * Update a CHARITY order — recalculates cost with updated location/charity.
+     * No wallet refreeze because no money was taken from the user.
+     */
+    public CreationDto updateCharityOrder(Long orderId, CharityOrderForm form, UUID userId) throws IOException {
+        User actor = getActiveUser(userId);
+        if (!actor.isUser() && !actor.isAdmin())
+            throw new BusinessException("Users or admins only");
+
+        Order order = findOrder(orderId);
+
+        if (order.getOrderCategory() != OrderCategory.CHARITY)
+            throw new BusinessException("This order is not a charity order");
+        if (!order.getUserId().equals(userId) && !actor.isAdmin())
+            throw new BusinessException("You are not allowed to update this order");
+        if (order.getStatus() != OrderStatus.PENDING)
+            throw new BusinessException("Order cannot be updated in current status");
+
+        Charity charity = charityRepository.findById(form.getCharityId())
+                .orElseThrow(() -> new ResourceNotFoundException("Charity not found: " + form.getCharityId()));
+        if (!charity.isActive()) throw new BusinessException("Charity is not active");
+
+        PricingDetails cost = costCalculationService.calculateCost(
+                form.getUserLatitude(), form.getUserLongitude(),
+                charity.getLatitude(), charity.getLongitude(),
+                null);
+
+        order.setCharityId(form.getCharityId());
+        order.setPickupLatitude(form.getUserLatitude());
+        order.setPickupLongitude(form.getUserLongitude());
+        order.setPickupAddress(form.getAddress());
+        order.setRecipientLatitude(charity.getLatitude());
+        order.setRecipientLongitude(charity.getLongitude());
+        order.setRecipientAddress(charity.getNameEn());
+        order.setRecipientName(charity.getNameEn());
+        order.setRecipientPhone(charity.getPhone());
+        order.setOrderType(form.getOrderType());
+        order.setAdditionalNotes(form.getAdditionalNotes());
+        order.setCollectionDate(form.getCollectionDate());
+        order.setAnyTime(form.isAnyTime());
+        order.setAllowInspection(form.isAllowInspection());
+        order.setDeliveryCost(cost.getTotalCost());
+        order.setDistanceKm(cost.getDistanceKm());
+        order.setDriverEarnings(cost.getTotalCost()); // driver earns full amount
+
+        String newPhoto = storageService.savePhoto(form.getPhoto());
+        if (newPhoto != null) order.setPhoto(newPhoto);
+
+        return enrichCreationDto(orderMapper.toCreationDto(orderRepository.save(order)));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     //  4. Driver Accepts
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * REGULAR: checks driver wallet covers insurance value before accepting.
+     * CHARITY: no insurance balance check — driver has no financial liability.
+     */
     public OrderDto driverConfirmOrder(Long orderId, UUID driverId) {
         User driver = getActiveUser(driverId);
         requireDriver(driver);
@@ -215,24 +356,34 @@ public class OrderService {
         if (order.getDriverId() != null)
             throw new BusinessException("Order already taken by another driver");
 
-        Wallet driverWallet = walletService.getWalletByUserId(driverId);
-        if (driverWallet.getWalletBalance() < order.getInsuranceValue())
-            throw new BusinessException("Insufficient balance. Need at least "
-                    + order.getInsuranceValue() + " EGP to accept this order.");
+        if (order.getOrderCategory() == OrderCategory.REGULAR) {
+            Wallet driverWallet = walletService.getWalletByUserId(driverId);
+            if (driverWallet.getWalletBalance() < order.getInsuranceValue())
+                throw new BusinessException("You Don't have enough balance. Need at least "
+                        + order.getInsuranceValue() + " EGP to accept this order.");
+        }
+        // CHARITY: no insurance balance check
 
         order.setDriverId(driverId);
         order.setStatus(OrderStatus.ACCEPTED);
         order.setConfirmedAt(LocalDateTime.now());
 
         Order saved = orderRepository.save(order);
-        publish(saved, OrderNotificationEvent.Type.DRIVER_ACCEPTED, driverId, null); // ✅ event
+        publish(saved, OrderNotificationEvent.Type.DRIVER_ACCEPTED, driverId, null);
         return enrichDto(orderMapper.toDto(saved));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  5. Confirm Pickup  (freeze driver insurance)
+    //  5. Confirm Pickup
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * REGULAR: freezes driver's insurance as collateral.
+     *           Delivery OTP is sent to the recipient's phone.
+     * CHARITY:  no insurance freeze.
+     *           Delivery OTP is sent to the charity's phone.
+     *           (The charity phone is already stored in recipientPhone.)
+     */
     public OrderDto confirmPickup(Long orderId, UUID driverId, String otp) {
         User driver = getActiveUser(driverId);
         requireDriver(driver);
@@ -251,18 +402,29 @@ public class OrderService {
         order.setPickupConfirmed(true);
         order.setStatus(OrderStatus.IN_PROGRESS);
         order.setPickedUpAt(LocalDateTime.now());
+        order.setOtpForPickup(null); // clear used OTP
 
-        financeService.freezeDriverInsurance(driverId, order.getInsuranceValue()); // ✅ delegated
+        if (order.getOrderCategory() == OrderCategory.REGULAR) {
+            financeService.freezeDriverInsurance(driverId, order.getInsuranceValue());
+        }
+        // CHARITY: no insurance freeze — delivery OTP recipient is charity phone
+        // (stored in recipientPhone), handled by the notification event below
+
         Order saved = orderRepository.save(order);
-
-        publish(saved, OrderNotificationEvent.Type.DELIVERY_OTP_SENT, null, deliveryOtp); // ✅ event
+        publish(saved, OrderNotificationEvent.Type.DELIVERY_OTP_SENT, null, deliveryOtp);
         return enrichDto(orderMapper.toDto(saved));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  6. Confirm Delivery  (settle all money)
+    //  6. Confirm Delivery
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * REGULAR: settleDelivery — user pays deliveryCost, driver earns net,
+     *          driver insurance unfrozen, user frozen amount unfrozen.
+     * CHARITY: app credits driver the full deliveryCost.
+     *          No deduction from user wallet. No freeze to undo.
+     */
     public OrderDto confirmDelivery(Long orderId, UUID driverId, String otp) {
         User driver = getActiveUser(driverId);
         requireDriver(driver);
@@ -272,22 +434,33 @@ public class OrderService {
         if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the assigned driver can confirm delivery");
         if (order.getStatus() != OrderStatus.IN_PROGRESS)
-            throw new BusinessException("Order must be IN_PROGRESS");
+            throw new BusinessException("Order must be IN_PROGRESS or IN_THE_WAY");
         if (!otp.equals(order.getOtpForDelivery()))
             throw new BusinessException("Invalid delivery OTP");
 
+        order.setOtpForDelivery(null); // clear used OTP
         order.setDeliveryConfirmed(true);
         order.setStatus(OrderStatus.DELIVERED);
         order.setDeliveredAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
 
-        financeService.settleDelivery(saved); // ✅ all money logic in one place
-        publish(saved, OrderNotificationEvent.Type.DELIVERY_CONFIRMED, null, null); // ✅ event
+        if (order.getOrderCategory() == OrderCategory.REGULAR) {
+            financeService.settleDelivery(saved);
+        } else {
+            // CHARITY: app pays driver full deliveryCost
+            if (saved.getDeliveryCost() > 0) {
+                Wallet driverWallet = walletService.getWalletByUserId(saved.getDriverId());
+                driverWallet.setWalletBalance(driverWallet.getWalletBalance() + saved.getDeliveryCost());
+                walletService.save(driverWallet);
+            }
+        }
+
+        publish(saved, OrderNotificationEvent.Type.DELIVERY_CONFIRMED, null, null);
         return enrichDto(orderMapper.toDto(saved));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  7-A. Return — generate OTP
+    //  7-A. Return — REGULAR only
     // ═══════════════════════════════════════════════════════════════════════
 
     public OrderDto returnOrder(Long orderId, UUID driverId) {
@@ -295,6 +468,9 @@ public class OrderService {
         requireDriver(driver);
 
         Order order = findOrder(orderId);
+
+        if (order.getOrderCategory() == OrderCategory.CHARITY)
+            throw new BusinessException("Charity orders do not support return flow");
 
         if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the assigned driver can return this order");
@@ -308,12 +484,12 @@ public class OrderService {
         order.setStatus(OrderStatus.IN_RETURN);
 
         Order saved = orderRepository.save(order);
-        publish(saved, OrderNotificationEvent.Type.RETURN_INITIATED, null, returnOtp); // ✅ event
+        publish(saved, OrderNotificationEvent.Type.RETURN_INITIATED, null, returnOtp);
         return enrichDto(orderMapper.toDto(saved));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  7-B. Confirm Return — settle money
+    //  7-B. Confirm Return — REGULAR only
     // ═══════════════════════════════════════════════════════════════════════
 
     public OrderDto confirmReturn(Long orderId, UUID driverId, String otp) {
@@ -321,6 +497,9 @@ public class OrderService {
         requireDriver(driver);
 
         Order order = findOrder(orderId);
+
+        if (order.getOrderCategory() == OrderCategory.CHARITY)
+            throw new BusinessException("Charity orders do not support return flow");
 
         if (!order.getDriverId().equals(driverId))
             throw new BusinessException("Only the assigned driver can confirm return");
@@ -333,8 +512,8 @@ public class OrderService {
         order.setDeliveredAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
 
-        financeService.settleReturn(saved); // ✅ all money logic in one place
-        publish(saved, OrderNotificationEvent.Type.RETURN_CONFIRMED, null, null); // ✅ event
+        financeService.settleReturn(saved);
+        publish(saved, OrderNotificationEvent.Type.RETURN_CONFIRMED, null, null);
         return enrichDto(orderMapper.toDto(saved));
     }
 
@@ -342,6 +521,11 @@ public class OrderService {
     //  8. Driver Cancels
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * Both REGULAR and CHARITY: resets order to PENDING so another driver can accept it.
+     * The difference is only in what gets reset on the wallet side — for REGULAR, nothing
+     * needs undoing at ACCEPTED stage (driver insurance is only frozen at PICKUP, not here).
+     */
     public OrderDto cancelOrderByDriver(Long orderId, UUID driverId) {
         User driver = getActiveUser(driverId);
         requireDriver(driver);
@@ -358,7 +542,7 @@ public class OrderService {
         order.setConfirmedAt(null);
 
         Order saved = orderRepository.save(order);
-        publish(saved, OrderNotificationEvent.Type.DRIVER_CANCELLED, driverId, null); // ✅ FIX 4: notifies user
+        publish(saved, OrderNotificationEvent.Type.DRIVER_CANCELLED, driverId, null);
         return enrichDto(orderMapper.toDto(saved));
     }
 
@@ -366,6 +550,17 @@ public class OrderService {
     //  9. User Cancels
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * REGULAR:
+     *   - No driver: unfreeze user wallet.
+     *   - Driver assigned (ACCEPTED): penalty = 1× deliveryCost paid to driver.
+     *   - Cannot cancel at IN_RETURN or DELIVERED.
+     *
+     * CHARITY:
+     *   - No driver: nothing to undo (no money was frozen).
+     *   - Driver assigned (ACCEPTED): no penalty — no money was taken from user.
+     *   - Cannot cancel at IN_PROGRESS, IN_THE_WAY, or DELIVERED (items already collected).
+     */
     public OrderDto cancelOrderByUser(Long orderId, UUID userId, String reason) {
         User user = getActiveUser(userId);
         if (!user.isUser() && !user.isAdmin())
@@ -375,28 +570,49 @@ public class OrderService {
 
         if (!order.getUserId().equals(userId) && !user.isAdmin())
             throw new BusinessException("Not authorized to cancel this order");
-        if (order.getStatus() == OrderStatus.DELIVERED || order.getStatus() == OrderStatus.IN_RETURN)
-            throw new BusinessException("Cannot cancel at stage: " + order.getStatus());
         if (order.getStatus() == OrderStatus.CANCELLED)
             throw new BusinessException("Order already cancelled");
 
-        // Scenario 1: no driver yet → simple unfreeze
-        if (order.getDriverId() == null) {
-            financeService.unfreezeForCancel(order.getUserId(), order.getDeliveryCost());
+        if (order.getOrderCategory() == OrderCategory.REGULAR) {
+            if (order.getStatus() == OrderStatus.DELIVERED || order.getStatus() == OrderStatus.IN_RETURN)
+                throw new BusinessException("Cannot cancel at stage: " + order.getStatus());
+
+            if (order.getDriverId() == null) {
+                financeService.unfreezeForCancel(order.getUserId(), order.getDeliveryCost());
+                order.setStatus(OrderStatus.CANCELLED);
+                order.setRejectionReason(reason);
+                Order saved = orderRepository.save(order);
+                publish(saved, OrderNotificationEvent.Type.USER_CANCELLED_NO_DRIVER, null, reason);
+                return enrichDto(orderMapper.toDto(saved));
+            }
+
+            financeService.settleCancellationWithPenalty(order);
             order.setStatus(OrderStatus.CANCELLED);
+            order.setRejectionReason(reason != null ? reason : "Cancelled by user after driver acceptance");
+            Order saved = orderRepository.save(order);
+            publish(saved, OrderNotificationEvent.Type.USER_CANCELLED_WITH_DRIVER, null, null);
+            return enrichDto(orderMapper.toDto(saved));
+
+        } else {
+            // CHARITY
+            if (order.getStatus() == OrderStatus.IN_PROGRESS
+                    || order.getStatus() == OrderStatus.DELIVERED)
+                throw new BusinessException("Cannot cancel after items have been collected: " + order.getStatus());
+
+            UUID assignedDriverId = order.getDriverId();
+            order.setStatus(OrderStatus.CANCELLED);
+            order.setDriverId(null);
             order.setRejectionReason(reason);
             Order saved = orderRepository.save(order);
-            publish(saved, OrderNotificationEvent.Type.USER_CANCELLED_NO_DRIVER, null, reason); // ✅ event
+
+            if (assignedDriverId != null) {
+                // notify driver — no penalty, just inform
+                publish(saved, OrderNotificationEvent.Type.USER_CANCELLED_WITH_DRIVER, assignedDriverId, reason);
+            } else {
+                publish(saved, OrderNotificationEvent.Type.USER_CANCELLED_NO_DRIVER, null, reason);
+            }
             return enrichDto(orderMapper.toDto(saved));
         }
-
-        // Scenario 2: driver accepted → penalty
-        financeService.settleCancellationWithPenalty(order); // ✅ delegated
-        order.setStatus(OrderStatus.CANCELLED);
-        order.setRejectionReason(reason != null ? reason : "Cancelled by user after driver acceptance");
-        Order saved = orderRepository.save(order);
-        publish(saved, OrderNotificationEvent.Type.USER_CANCELLED_WITH_DRIVER, null, null); // ✅ event
-        return enrichDto(orderMapper.toDto(saved));
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -441,6 +657,16 @@ public class OrderService {
                 .map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }
 
+    /** Filter by category so each app screen only sees its own order type. */
+    public List<OrderDto> getAvailableOrdersByCategory(UUID driverId, OrderCategory category) {
+        requireDriver(getActiveUser(driverId));
+        return orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.PENDING)
+                .stream()
+                .filter(o -> o.getCreationStatus() == CreationStatus.CONFIRMED
+                        && o.getOrderCategory() == category)
+                .map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
+    }
+
     public DriverDto getOrderByIdAsDriverDto(Long orderId) {
         Order order = findOrder(orderId);
         if (order.getCreationStatus() == CreationStatus.CREATED)
@@ -466,7 +692,6 @@ public class OrderService {
         return new OrderStatusCounts(orders.size(), active);
     }
 
-    // Admin-only: return all confirmed orders in the system
     public List<OrderDto> getAllOrders(UUID adminId) {
         requireAdmin(getActiveUser(adminId));
         return orderRepository.findAll().stream()
@@ -474,7 +699,6 @@ public class OrderService {
                 .map(orderMapper::toDto).map(this::enrichDto).collect(Collectors.toList());
     }
 
-    // For current user: return their confirmed orders only
     public List<OrderDto> getAllOrdersForUser(UUID userId) {
         requireUser(getActiveUser(userId));
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
@@ -487,13 +711,12 @@ public class OrderService {
         List<Order> orders = orderRepository.findByUserId(userId);
         OrderStatisticsDto dto = new OrderStatisticsDto();
         dto.setTotalOrders(orders.size());
-        dto.setPending(  count(orders, OrderStatus.PENDING));
-        dto.setAccepted( count(orders, OrderStatus.ACCEPTED));
+        dto.setPending(   count(orders, OrderStatus.PENDING));
+        dto.setAccepted(  count(orders, OrderStatus.ACCEPTED));
         dto.setInProgress(count(orders, OrderStatus.IN_PROGRESS));
-        dto.setInTheWay( 0); // removed per requirements
         dto.setInDelivery(count(orders, OrderStatus.RETURNED));
-        dto.setDelivered(count(orders, OrderStatus.DELIVERED));
-        dto.setCancelled(count(orders, OrderStatus.CANCELLED));
+        dto.setDelivered( count(orders, OrderStatus.DELIVERED));
+        dto.setCancelled( count(orders, OrderStatus.CANCELLED));
         return dto;
     }
 
@@ -506,10 +729,6 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
     }
 
-    /**
-     * ✅ FIX: Unified name resolution — used by all three enrich methods.
-     * One DB lookup pattern instead of three copy-pasted blocks.
-     */
     private String resolveName(UUID id) {
         if (id == null) return null;
         return userRepository.findById(id).map(User::getName).orElse(null);

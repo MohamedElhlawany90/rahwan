@@ -14,36 +14,53 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class Order {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // ── Category ──────────────────────────────────────────────────────────
+    /**
+     * Determines whether this is a regular delivery or a charity donation (WasalElkheer).
+     * Drives all branching logic in OrderService.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OrderCategory orderCategory = OrderCategory.REGULAR;
+
+    // ── Shared: Sender ────────────────────────────────────────────────────
     @Column(nullable = false)
     private UUID userId;
 
     private UUID driverId;
 
     private String photo;
-
     private String driverPhoto;
 
-    // Pickup Location
+    // ── REGULAR only: Pickup Location ─────────────────────────────────────
     private double pickupLatitude;
     private double pickupLongitude;
     private String pickupAddress;
 
-    // Recipient Location
+    // ── REGULAR only: Recipient Location & Details ────────────────────────
     private double recipientLatitude;
     private double recipientLongitude;
     private String recipientAddress;
-
-    // Recipient Details
-    @Column(nullable = false)
     private String recipientName;
-    @Column(nullable = false)
     private String recipientPhone;
 
-    // Order Details
+    // ── CHARITY only: Donor pickup location ──────────────────────────────
+    // Reuses pickupLatitude/pickupLongitude/pickupAddress for the donor's location.
+    // charityId holds the selected charity; charity coordinates are looked up at
+    // runtime (not stored) to keep charity data consistent with CharityRepository.
+
+    /**
+     * CHARITY orders only. The ID of the selected Charity (recipient).
+     * NULL for REGULAR orders.
+     */
+    private Long charityId;
+
+    // ── Shared: Order Details ─────────────────────────────────────────────
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderType orderType;
@@ -53,39 +70,40 @@ public class Order {
     @Column(nullable = false)
     private double deliveryCost;
 
-    // Commission Fields
+    // ── REGULAR only: Commission ──────────────────────────────────────────
+    // For CHARITY orders these remain 0.0 — the app pays full deliveryCost to driver.
     @Column(nullable = false)
-    private double commissionRate = 10.0; // نسبة العمولة %
+    private double commissionRate = 0.0;
 
     @Column(nullable = false)
-    private double appCommission = 0.0; // عمولة التطبيق
+    private double appCommission = 0.0;
 
     @Column(nullable = false)
-    private double driverEarnings = 0.0; // أرباح السائق
+    private double driverEarnings = 0.0;
 
     @Column(length = 500)
     private String additionalNotes;
 
     private String rejectionReason;
 
-    // Collection Time
+    // ── Shared: Collection Time ───────────────────────────────────────────
     private LocalDate collectionDate;
     private LocalTime collectionTime;
+
     @Column(nullable = false)
     private Boolean anyTime = false;
 
-    // Options
     @Column(nullable = false)
     private Boolean allowInspection = false;
+
     @Column(nullable = false)
     private Boolean receiverPaysShipping = false;
 
-    // Status & Tracking
+    // ── Shared: Status & Tracking ─────────────────────────────────────────
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderStatus status = OrderStatus.PENDING;
 
-    // creation status
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private CreationStatus creationStatus;
@@ -93,17 +111,18 @@ public class Order {
     @Column(unique = true)
     private String trackingNumber;
 
-    // Distance
     private double distanceKm;
 
-    // OTP Fields
+    // ── Shared: OTP ───────────────────────────────────────────────────────
     private String otpForPickup;
     private String otpForDelivery;
     private boolean pickupConfirmed = false;
     private boolean deliveryConfirmed = false;
+
+    // REGULAR only — CHARITY never has a return flow
     private String otpForReturn;
 
-    // Timestamps
+    // ── Shared: Timestamps ────────────────────────────────────────────────
     @Column(nullable = false)
     private LocalDateTime createdAt;
     private LocalDateTime confirmedAt;

@@ -4,6 +4,7 @@ import com.blueWhale.Rahwan.otp.OtpRequest;
 import com.blueWhale.Rahwan.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -13,6 +14,16 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Unified controller for all order types.
+ *
+ * REGULAR orders  → /api/orders/...
+ * CHARITY orders  → /api/orders/charity/...
+ *
+ * Shared lifecycle endpoints (confirm, pickup, delivery, cancel, etc.)
+ * are at /api/orders/{orderId}/... and work for both types — the service
+ * branches internally based on OrderCategory.
+ */
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
@@ -20,7 +31,11 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    /** 1. User: إنشاء طلب */
+    // ═══════════════════════════════════════════════════════════════════
+    //  REGULAR order creation & update
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 1. User: create a regular delivery order */
     @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CreationDto> createOrder(
             @AuthenticationPrincipal UserPrincipal principal,
@@ -29,16 +44,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.createOrder(orderForm, principal.getId()));
     }
 
-    /** 2. User: تأكيد الطلب - أضفنا principal */
-    @PostMapping("/{orderId}/confirm")
-    public ResponseEntity<OrderDto> confirmOrder(
-            @PathVariable Long orderId,
-            @AuthenticationPrincipal UserPrincipal principal  // ✅ أُضيف
-    ) {
-        return ResponseEntity.ok(orderService.confirmOrder(orderId, principal.getId()));
-    }
-
-    /** 3. User/Admin: تحديث الطلب */
+    /** 3. User/Admin: update a regular delivery order */
     @PutMapping(value = "/update/{orderId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CreationDto> updateOrder(
             @PathVariable Long orderId,
@@ -48,7 +54,45 @@ public class OrderController {
         return ResponseEntity.ok(orderService.updateOrder(orderId, orderForm, principal.getId()));
     }
 
-    /** 4. Driver: قبول الطلب */
+    // ═══════════════════════════════════════════════════════════════════
+    //  CHARITY order creation & update  (/charity sub-path)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 1-B. User: create a charity donation order (WasalElkheer) */
+    @PostMapping(value = "/charity/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<CreationDto> createCharityOrder(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @ModelAttribute CharityOrderForm form
+    ) throws IOException {
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(orderService.createCharityOrder(form, principal.getId()));
+    }
+
+    /** 3-B. User/Admin: update a charity donation order */
+    @PutMapping(value = "/charity/update/{orderId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<CreationDto> updateCharityOrder(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @ModelAttribute CharityOrderForm form
+    ) throws IOException {
+        return ResponseEntity.ok(orderService.updateCharityOrder(orderId, form, principal.getId()));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Shared lifecycle  (works for both REGULAR and CHARITY)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** 2. User: confirm order (REGULAR freezes wallet; CHARITY does not) */
+    @PostMapping("/{orderId}/confirm")
+    public ResponseEntity<OrderDto> confirmOrder(
+            @PathVariable Long orderId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(orderService.confirmOrder(orderId, principal.getId()));
+    }
+
+    /** 4. Driver: accept an available order */
     @PostMapping("/{orderId}/confirm-by-driver")
     public ResponseEntity<OrderDto> driverConfirmOrder(
             @PathVariable Long orderId,
@@ -57,7 +101,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.driverConfirmOrder(orderId, principal.getId()));
     }
 
-    /** 5. Driver: تأكيد الاستلام */
+    /** 5. Driver: confirm pickup with OTP */
     @PostMapping("/{orderId}/confirm-pickup")
     public ResponseEntity<OrderDto> confirmPickup(
             @PathVariable Long orderId,
@@ -67,7 +111,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.confirmPickup(orderId, principal.getId(), otpRequest.getOtp()));
     }
 
-    /** 6. Driver: تأكيد التسليم */
+    /** 6. Driver: confirm delivery with OTP */
     @PostMapping("/{orderId}/confirm-delivery")
     public ResponseEntity<OrderDto> confirmDelivery(
             @PathVariable Long orderId,
@@ -77,7 +121,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.confirmDelivery(orderId, principal.getId(), otpRequest.getOtp()));
     }
 
-    /** 7-A. Driver: بدء إرجاع الطلب — يُولِّد OTP ويبعته لليوزر */
+    /** 7-A. Driver: initiate return — REGULAR orders only */
     @PostMapping("/{orderId}/return")
     public ResponseEntity<OrderDto> returnOrder(
             @PathVariable Long orderId,
@@ -86,7 +130,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.returnOrder(orderId, principal.getId()));
     }
 
-    /** 7-B. Driver: تأكيد الإرجاع بـ OTP — تحويل الأموال */
+    /** 7-B. Driver: confirm return with OTP — REGULAR orders only */
     @PostMapping("/{orderId}/confirm-return")
     public ResponseEntity<OrderDto> confirmReturn(
             @PathVariable Long orderId,
@@ -96,7 +140,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.confirmReturn(orderId, principal.getId(), otpRequest.getOtp()));
     }
 
-    /** 9. Driver: إلغاء الطلب */
+    /** 8. Driver: cancel an accepted order (order returns to PENDING) */
     @PostMapping("/{orderId}/cancel-by-driver")
     public ResponseEntity<OrderDto> cancelOrderByDriver(
             @PathVariable Long orderId,
@@ -105,7 +149,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.cancelOrderByDriver(orderId, principal.getId()));
     }
 
-    /** 10. User/Admin: إلغاء الطلب */
+    /** 9. User/Admin: cancel an order */
     @PostMapping("/{orderId}/cancel-by-user")
     public ResponseEntity<OrderDto> cancelOrderByUser(
             @PathVariable Long orderId,
@@ -115,13 +159,19 @@ public class OrderController {
         return ResponseEntity.ok(orderService.cancelOrderByUser(orderId, principal.getId(), reason));
     }
 
-    /** 11. User: طلبات المستخدم */
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<OrderDto>> getUserOrders(@PathVariable UUID userId) {
-        return ResponseEntity.ok(orderService.getUserOrders(userId));
+    // ═══════════════════════════════════════════════════════════════════
+    //  Queries — general
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** My orders (all types) */
+    @GetMapping("/my-orders")
+    public ResponseEntity<List<OrderDto>> getMyOrders(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(orderService.getUserOrders(principal.getId()));
     }
 
-    /** 12. Driver: طلبات السائق */
+    /** My orders as a driver */
     @GetMapping("/driver")
     public ResponseEntity<List<OrderDto>> getDriverOrders(
             @AuthenticationPrincipal UserPrincipal principal
@@ -129,15 +179,33 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getDriverOrders(principal.getId()));
     }
 
-    /** 13. Driver: الطلبات المتاحة - أضفنا principal */
+    /** Available orders for driver — all types */
     @GetMapping("/available")
     public ResponseEntity<List<OrderDto>> getAvailableOrders(
-            @AuthenticationPrincipal UserPrincipal principal  // ✅ أُضيف
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(orderService.getAvailableOrders(principal.getId()));
     }
 
-    /** 14. User: طلبات حسب الحالة */
+    /** Available REGULAR orders only */
+    @GetMapping("/available/regular")
+    public ResponseEntity<List<OrderDto>> getAvailableRegularOrders(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(
+                orderService.getAvailableOrdersByCategory(principal.getId(), OrderCategory.REGULAR));
+    }
+
+    /** Available CHARITY orders only */
+    @GetMapping("/available/charity")
+    public ResponseEntity<List<OrderDto>> getAvailableCharityOrders(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(
+                orderService.getAvailableOrdersByCategory(principal.getId(), OrderCategory.CHARITY));
+    }
+
+    /** User: orders by status */
     @GetMapping("/status/{status}")
     public ResponseEntity<List<OrderDto>> getOrdersByStatus(
             @PathVariable OrderStatus status,
@@ -146,19 +214,19 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrdersByUserAndStatus(principal.getId(), status));
     }
 
-    /** 15. Public: تفاصيل طلب */
+    /** Public: order details */
     @GetMapping("/{orderId}")
     public ResponseEntity<DriverDto> getOrder(@PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.getOrderByIdAsDriverDto(orderId));
     }
 
-    /** 16. Public: تتبع الطلب */
+    /** Public: track by tracking number */
     @GetMapping("/track/{trackingNumber}")
     public ResponseEntity<OrderDto> trackOrder(@PathVariable String trackingNumber) {
         return ResponseEntity.ok(orderService.getOrderByTrackingNumber(trackingNumber));
     }
 
-    /** 17. User: عدد الطلبات */
+    /** User: order counts */
     @GetMapping("/countByStatus")
     public ResponseEntity<OrderStatusCounts> getUserOrderCounts(
             @AuthenticationPrincipal UserPrincipal principal
@@ -166,18 +234,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrdersCountsByUser(principal.getId()));
     }
 
-    /** 18. Admin: كل الطلبات - أضفنا principal */
-    @GetMapping
-    public ResponseEntity<List<OrderDto>> getAllOrders(UUID adminId) {
-        return ResponseEntity.ok(orderService.getAllOrders(adminId));
-    }
-
-    @GetMapping("user")
-    public ResponseEntity<List<OrderDto>> getAllOrdersForUser(UUID userId) {
-        return ResponseEntity.ok(orderService.getAllOrdersForUser(userId));
-    }
-
-    /** 19. User: إحصائيات */
+    /** User: statistics */
     @GetMapping("/statistics")
     public ResponseEntity<OrderStatisticsDto> getOrderStatistics(
             @AuthenticationPrincipal UserPrincipal principal
@@ -185,12 +242,32 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrderStatistics(principal.getId()));
     }
 
-    /** 20. Admin: تغيير حالة الطلب - أضفنا principal */
+    // ═══════════════════════════════════════════════════════════════════
+    //  Admin
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Admin: all confirmed orders */
+    @GetMapping
+    public ResponseEntity<List<OrderDto>> getAllOrders(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(orderService.getAllOrders(principal.getId()));
+    }
+
+    /** User: all confirmed orders for current user */
+    @GetMapping("/user")
+    public ResponseEntity<List<OrderDto>> getAllOrdersForUser(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(orderService.getAllOrdersForUser(principal.getId()));
+    }
+
+    /** Admin: force-change order status */
     @PatchMapping("/{orderId}/status")
     public ResponseEntity<OrderDto> changeOrderStatus(
             @PathVariable Long orderId,
             @RequestParam OrderStatus status,
-            @AuthenticationPrincipal UserPrincipal principal  // ✅ أُضيف
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(orderService.changeOrderStatus(orderId, status, principal.getId()));
     }

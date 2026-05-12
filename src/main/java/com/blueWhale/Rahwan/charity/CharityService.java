@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CharityService {
 
-    private static final String UPLOADED_FOLDER = "/home/ubuntu/rahwan/";
+    private static final String UPLOADED_FOLDER = "/home/elhlawnay/rahwan/";
     private final CharityRepository charityRepository;
     private final CharityMapper charityMapper;
 

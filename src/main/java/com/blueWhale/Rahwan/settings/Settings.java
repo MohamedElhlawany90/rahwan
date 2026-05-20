@@ -31,4 +31,7 @@ public class Settings {
 
     @Column(columnDefinition = "TEXT")
     private String contactUs;
+
+    @Column(columnDefinition = "TEXT")
+    private String privacyAndPolicy;
 }

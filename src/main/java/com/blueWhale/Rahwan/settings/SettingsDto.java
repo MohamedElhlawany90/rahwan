@@ -19,4 +19,5 @@ public class SettingsDto {
     private String requestType;
     private String rejectReason;
     private String contactUs;
+    private String privacyAndPolicy;
 }

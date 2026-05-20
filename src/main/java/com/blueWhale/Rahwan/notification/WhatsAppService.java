@@ -26,13 +26,6 @@ public class WhatsAppService {
                 رمز التأكيد: %s
                 
                 ⚠️ لا تشارك هذا الرمز مع أي شخص.
-                
-                ---
-                🔐 Your Account Verification OTP
-                
-                Code: %s
-                
-                ⚠️ Do not share this code with anyone.
                 """.formatted(otp, otp);
 
         send(phone, message);
@@ -50,14 +43,6 @@ public class WhatsAppService {
                 الرمز: %s
                 
                 📦 شارك هذا الرمز مع السائق عند وصوله لاستلام الطلب.
-                
-                ---
-                🔑 Pickup OTP
-                
-                Hello %s,
-                Code: %s
-                
-                📦 Share this code with the driver when they arrive for pickup.
                 """.formatted(userName, otp, userName, otp);
 
         send(phone, message);
@@ -75,14 +60,6 @@ public class WhatsAppService {
                 الرمز: %s
                 
                 📦 شارك هذا الرمز مع السائق عند استلام الطلب.
-                
-                ---
-                🔑 Delivery OTP
-                
-                Hello %s,
-                Code: %s
-                
-                📦 Share this code with the driver upon delivery.
                 """.formatted(recipientName, otp, recipientName, otp);
 
         send(phone, message);
@@ -98,12 +75,6 @@ public class WhatsAppService {
                 
                 📦 شارك هذا الرمز مع السائق عند استلام الطلب لإرجاعه.
                 سيتم خصم ضعف ثمن الشحن من محفظتك. 
-                ---
-                🔑 Return Order OTP
-                
-                Code: %s
-                
-                📦 Share this code with the driver when they come to pick up the return order.
                 """.formatted(otp, otp);
         send(phone, message);
 
@@ -119,14 +90,6 @@ public class WhatsAppService {
                 💰 تكلفة التوصيل: %.2f جنيه
                 
                 شكراً لاستخدامك خدماتنا!
-                
-                ---
-                ✅ Order Confirmed!
-                
-                📦 Tracking Number: %s
-                💰 Delivery Cost: %.2f EGP
-                
-                Thank you for using our service!
                 """.formatted(trackingNumber, cost, trackingNumber, cost);
 
         send(phone, message);
@@ -143,14 +106,6 @@ public class WhatsAppService {
                 🙏 شكراً لك على التبرع.
                 
                 سنخطرك عندما يقبل سائق الطلب.
-                
-                ---
-                ✅ Donation Order Confirmed!
-                
-                📦 Order ID: %d
-                🙏 Thank you for donating.
-                
-                We will notify you once a driver accepts the order.
                 """.formatted(orderId, orderId);
 
         send(phone, message);
@@ -167,14 +122,6 @@ public class WhatsAppService {
                 📦 رقم التتبع: %s
                 
                 🔔 السائق في الطريق إليك، يُرجى الاستعداد.
-                
-                ---
-                🚗 Driver Accepted Your Order!
-                
-                👤 Driver: %s
-                📦 Tracking Number: %s
-                
-                🔔 The driver is on their way, please be ready.
                 """.formatted(driverName, trackingNumber, driverName, trackingNumber);
 
         send(phone, message);
@@ -191,14 +138,6 @@ public class WhatsAppService {
                 
                 شكراً لاستخدامك خدماتنا!
                 نتمنى خدمتك مرة أخرى. 🙏
-                
-                ---
-                ✅ Order Delivered Successfully!
-                
-                📦 Tracking Number: %s
-                
-                Thank you for using our service!
-                We hope to serve you again. 🙏
                 """.formatted(trackingNumber, trackingNumber);
 
         send(phone, message);
@@ -226,14 +165,6 @@ public class WhatsAppService {
                 📝 السبب: %s
                 
                 إذا كان لديك أي استفسار، يُرجى التواصل مع الدعم.
-                
-                ---
-                ❌ Order Cancelled
-                
-                📦 Tracking Number: %s
-                📝 Reason: %s
-                
-                If you have any questions, please contact support.
                 """.formatted(trackingNumber, reason, trackingNumber, reason);
 
         send(phone, message);

@@ -6,8 +6,10 @@ import com.blueWhale.Rahwan.commission.CommissionSettings;
 import com.blueWhale.Rahwan.commission.CommissionSettingsService;
 import com.blueWhale.Rahwan.exception.BusinessException;
 import com.blueWhale.Rahwan.exception.ResourceNotFoundException;
+import com.blueWhale.Rahwan.order.dto.DistanceResult;
 import com.blueWhale.Rahwan.order.service.CostCalculationService;
 import com.blueWhale.Rahwan.order.service.PricingDetails;
+import com.blueWhale.Rahwan.order.service.distance.HaversineDistanceStrategy;
 import com.blueWhale.Rahwan.otp.OrderOtpService;
 import com.blueWhale.Rahwan.user.User;
 import com.blueWhale.Rahwan.user.UserRepository;
@@ -21,9 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -60,6 +60,7 @@ public class OrderService {
     private final StorageService             storageService;
     private final OrderFinanceService        financeService;
     private final ApplicationEventPublisher  eventPublisher;
+    private final HaversineDistanceStrategy haversineDistanceStrategy;
 
     // ═══════════════════════════════════════════════════════════════════════
     //  Role Guards
@@ -720,6 +721,50 @@ public class OrderService {
         return dto;
     }
 
+    /**
+     * Find nearest available orders to a driver's current location.
+     * Authorization: DRIVER role فقط
+     *
+     * @param driverId        the driver making the request (used for role check)
+     * @param driverLatitude  driver's current latitude
+     * @param driverLongitude driver's current longitude
+     * @param maxDistanceKm   maximum distance in kilometers to include (<=0 means no limit)
+     * @param limit           maximum number of results to return (<=0 defaults to 20)
+     * @return list of nearest OrderDto objects with distanceKm populated
+     */
+    public List<OrderDto> getNearestAvailableOrders(UUID driverId, double driverLatitude, double driverLongitude,
+                                                    double maxDistanceKm, int limit) {
+        User driver = getActiveUser(driverId);
+        requireDriver(driver);
+
+        int resultLimit = limit > 0 ? limit : 20;
+
+        return orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.PENDING)
+                .stream()
+                // only user-confirmed and not yet assigned orders
+                .filter(o -> o.getCreationStatus() == CreationStatus.CONFIRMED && o.getDriverId() == null)
+                // compute distance and sort
+                .map(o -> {
+                    DistanceResult result = haversineDistanceStrategy.calculateDistance(
+                            driverLatitude,
+                            driverLongitude,
+                            o.getPickupLatitude(),
+                            o.getPickupLongitude()
+                    );
+
+                    double dist = result.getDistanceKm();
+                    return new AbstractMap.SimpleEntry<>(o, dist);
+                })
+                .filter(entry -> maxDistanceKm <= 0 || entry.getValue() <= maxDistanceKm)
+                .sorted(Comparator.comparingDouble(Map.Entry::getValue))
+                .limit(resultLimit)
+                .map(entry -> {
+                    OrderDto dto = orderMapper.toDto(entry.getKey());
+                    dto.setDistanceKm(entry.getValue());
+                    return enrichDto(dto);
+                })
+                .collect(Collectors.toList());
+    }
     // ═══════════════════════════════════════════════════════════════════════
     //  Private Helpers
     // ═══════════════════════════════════════════════════════════════════════

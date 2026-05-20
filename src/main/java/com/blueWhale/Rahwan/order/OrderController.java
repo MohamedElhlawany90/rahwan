@@ -271,4 +271,30 @@ public class OrderController {
     ) {
         return ResponseEntity.ok(orderService.changeOrderStatus(orderId, status, principal.getId()));
     }
+
+    /**
+     * Driver: get nearest available orders based on current location
+     */
+    @GetMapping("/available/nearest")
+    public ResponseEntity<List<OrderDto>> getNearestAvailableOrders(
+            @AuthenticationPrincipal UserPrincipal principal,
+
+            @RequestParam double latitude,
+            @RequestParam double longitude,
+
+            @RequestParam(defaultValue = "0") double maxDistanceKm,
+
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+
+        return ResponseEntity.ok(
+                orderService.getNearestAvailableOrders(
+                        principal.getId(),
+                        latitude,
+                        longitude,
+                        maxDistanceKm,
+                        limit
+                )
+        );
+    }
 }
